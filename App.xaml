@@ -3,6 +3,8 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:local="clr-namespace:GoodGovernanceApp"
              xmlns:localConverters="clr-namespace:GoodGovernanceApp.Converters"
+             xmlns:views="clr-namespace:GoodGovernanceApp.Views"
+             xmlns:viewmodels="clr-namespace:GoodGovernanceApp.ViewModels"
              xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes">
     <Application.Resources>
         <ResourceDictionary>
@@ -14,6 +16,50 @@
                 <ResourceDictionary Source="pack://application:,,,/GoodGovernanceApp;component/Views/Styles/MetroTileStyles.xaml"/>
             </ResourceDictionary.MergedDictionaries>
 
+            <!-- ── MVVM DataTemplates ───────────────────────────────── -->
+            <DataTemplate DataType="{x:Type viewmodels:DashboardViewModel}">
+                <views:DashboardView />
+            </DataTemplate>
+            <DataTemplate DataType="{x:Type viewmodels:ProfileViewModel}">
+                <views:ProfileView />
+            </DataTemplate>
+            <DataTemplate DataType="{x:Type viewmodels:UserManagementViewModel}">
+                <views:UserManagementView />
+            </DataTemplate>
+            <DataTemplate DataType="{x:Type viewmodels:ParametersViewModel}">
+                <views:ParametersView />
+            </DataTemplate>
+            <DataTemplate DataType="{x:Type viewmodels:BudgetTransactionsViewModel}">
+                <views:BudgetTransactionsView />
+            </DataTemplate>
+            <DataTemplate DataType="{x:Type viewmodels:ConsolidatedTransactionsPageViewModel}">
+                <views:ConsolidatedTransactionsView />
+            </DataTemplate>
+            <DataTemplate DataType="{x:Type viewmodels:ReportsViewModel}">
+                <views:ReportsView />
+            </DataTemplate>
+            <DataTemplate DataType="{x:Type viewmodels:BudgetAllocationViewModel}">
+                <views:BudgetAllocationView />
+            </DataTemplate>
+            <DataTemplate DataType="{x:Type viewmodels:CrsBeneficiaryViewModel}">
+                <views:CrsBeneficiaryView />
+            </DataTemplate>
+            <DataTemplate DataType="{x:Type viewmodels:SettingsViewModel}">
+                <views:SettingsView />
+            </DataTemplate>
+            <DataTemplate DataType="{x:Type viewmodels:DepartmentManagementViewModel}">
+                <views:DepartmentManagementView />
+            </DataTemplate>
+            <DataTemplate DataType="{x:Type viewmodels:FileUploadViewModel}">
+                <views:FileUploadView />
+            </DataTemplate>
+            <DataTemplate DataType="{x:Type viewmodels:EvaluationViewModel}">
+                <views:EvaluationView />
+            </DataTemplate>
+            <DataTemplate DataType="{x:Type viewmodels:AuditLogViewModel}">
+                <views:AuditLogView />
+            </DataTemplate>
+
             <!-- ── Value Converters ─────────────────────────────────── -->
             <localConverters:NullToVisibilityConverter          x:Key="NullToVisibilityConverter"/>
             <localConverters:StringToVisibilityConverter        x:Key="StringToVisibilityConverter"/>
@@ -22,6 +68,96 @@
             <localConverters:InverseBoolToVisibilityConverter   x:Key="InverseBoolToVisibilityConverter"/>
             <localConverters:StringToSolidColorBrushConverter   x:Key="StringToSolidColorBrushConverter"/>
 
+            <localConverters:StringToSolidColorBrushConverter   x:Key="ColorConverter"/>
+            <localConverters:BoolToVisibilityConverter          x:Key="BoolToVis"/>
+            <localConverters:InverseBoolToVisibilityConverter   x:Key="InvBoolToVis"/>
+            <localConverters:NullToVisibilityConverter          x:Key="NullToVis"/>
+
+            <!-- Nav Button Style -->
+            <Style x:Key="NavButtonStyle" TargetType="Button">
+                <Setter Property="Background" Value="Transparent"/>
+                <Setter Property="Foreground" Value="#8DB355"/>
+                <Setter Property="BorderThickness" Value="0"/>
+                <Setter Property="Height" Value="56"/>
+                <Setter Property="Margin" Value="16,4,16,4"/>
+                <Setter Property="HorizontalContentAlignment" Value="Left"/>
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="Button">
+                            <Border x:Name="border" Background="{TemplateBinding Background}" CornerRadius="12" Padding="8,0">
+                                <ContentPresenter HorizontalAlignment="Left" VerticalAlignment="Center"/>
+                            </Border>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter TargetName="border" Property="Background" Value="#000000"/>
+                                    <Setter Property="Foreground" Value="White"/>
+                                </Trigger>
+                                <Trigger Property="IsPressed" Value="True">
+                                    <Setter TargetName="border" Property="Background" Value="#000000"/>
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+
+            <!-- Tile Button Style -->
+            <Style x:Key="TileButtonStyle" TargetType="Button">
+                <Setter Property="Foreground" Value="White"/>
+                <Setter Property="BorderThickness" Value="0"/>
+                <Setter Property="Margin" Value="8"/>
+                <Setter Property="RenderTransformOrigin" Value="0.5,0.5"/>
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="Button">
+                            <Border x:Name="border" Background="{TemplateBinding Background}" CornerRadius="12" Padding="16">
+                                <Border.RenderTransform>
+                                    <ScaleTransform x:Name="scale" ScaleX="1" ScaleY="1"/>
+                                </Border.RenderTransform>
+                                <ContentPresenter HorizontalAlignment="Left" VerticalAlignment="Top"/>
+                            </Border>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Trigger.EnterActions>
+                                        <BeginStoryboard>
+                                            <Storyboard>
+                                                <DoubleAnimation Storyboard.TargetName="scale" Storyboard.TargetProperty="ScaleX" To="1.02" Duration="0:0:0.1"/>
+                                                <DoubleAnimation Storyboard.TargetName="scale" Storyboard.TargetProperty="ScaleY" To="1.02" Duration="0:0:0.1"/>
+                                            </Storyboard>
+                                        </BeginStoryboard>
+                                    </Trigger.EnterActions>
+                                    <Trigger.ExitActions>
+                                        <BeginStoryboard>
+                                            <Storyboard>
+                                                <DoubleAnimation Storyboard.TargetName="scale" Storyboard.TargetProperty="ScaleX" To="1" Duration="0:0:0.1"/>
+                                                <DoubleAnimation Storyboard.TargetName="scale" Storyboard.TargetProperty="ScaleY" To="1" Duration="0:0:0.1"/>
+                                            </Storyboard>
+                                        </BeginStoryboard>
+                                    </Trigger.ExitActions>
+                                </Trigger>
+                                <Trigger Property="IsPressed" Value="True">
+                                    <Trigger.EnterActions>
+                                        <BeginStoryboard>
+                                            <Storyboard>
+                                                <DoubleAnimation Storyboard.TargetName="scale" Storyboard.TargetProperty="ScaleX" To="0.98" Duration="0:0:0.05"/>
+                                                <DoubleAnimation Storyboard.TargetName="scale" Storyboard.TargetProperty="ScaleY" To="0.98" Duration="0:0:0.05"/>
+                                            </Storyboard>
+                                        </BeginStoryboard>
+                                    </Trigger.EnterActions>
+                                    <Trigger.ExitActions>
+                                        <BeginStoryboard>
+                                            <Storyboard>
+                                                <DoubleAnimation Storyboard.TargetName="scale" Storyboard.TargetProperty="ScaleX" To="1.02" Duration="0:0:0.05"/>
+                                                <DoubleAnimation Storyboard.TargetName="scale" Storyboard.TargetProperty="ScaleY" To="1.02" Duration="0:0:0.05"/>
+                                            </Storyboard>
+                                        </BeginStoryboard>
+                                    </Trigger.ExitActions>
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
         </ResourceDictionary>
     </Application.Resources>
 </Application>

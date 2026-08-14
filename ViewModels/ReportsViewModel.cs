@@ -8,8 +8,10 @@ using System.Windows.Input;
 using GoodGovernanceApp.Data;
 using GoodGovernanceApp.Models;
 using GoodGovernanceApp.Services;
-using LiveCharts;
-using LiveCharts.Wpf;
+using LiveChartsCore;
+using LiveChartsCore.SkiaSharpView;
+using LiveChartsCore.SkiaSharpView.Painting;
+using SkiaSharp;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Data.Sqlite;
@@ -19,6 +21,8 @@ namespace GoodGovernanceApp.ViewModels;
 public class ReportsViewModel : ViewModelBase
 {
     private readonly AppDbContext _context;
+    private readonly GoodGovernanceApp.Services.IConnectivityService _connectivityService;
+    private readonly GoodGovernanceApp.Data.IDatabaseConfig _databaseConfig;
 
     // ── Report Type List ──────────────────────────────────────────────────────
     public ObservableCollection<string> ReportTypes { get; } = new()
@@ -53,6 +57,43 @@ public class ReportsViewModel : ViewModelBase
         }
     }
 
+    // ── Global Filters ────────────────────────────────────────────────────────
+    public ObservableCollection<string> AvailableYears { get; } = new ObservableCollection<string>(
+        new[] { "All" }.Concat(Enumerable.Range(2020, DateTime.Now.Year - 2019).Select(y => y.ToString()))
+    );
+
+    public ObservableCollection<string> AvailableMonths { get; } = new() 
+    { 
+        "All", "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December" 
+    };
+
+    private string _selectedYear = "All";
+    public string SelectedYear
+    {
+        get => _selectedYear;
+        set
+        {
+            _selectedYear = value;
+            OnPropertyChanged();
+            _ = GenerateReportAsync();
+        }
+    }
+
+    private string _selectedMonth = "All";
+    public string SelectedMonth
+    {
+        get => _selectedMonth;
+        set
+        {
+            _selectedMonth = value;
+            OnPropertyChanged();
+            _ = GenerateReportAsync();
+        }
+    }
+
+    private int? GetSelectedYear() => SelectedYear == "All" ? null : int.Parse(SelectedYear);
+    private int? GetSelectedMonth() => SelectedMonth == "All" ? null : AvailableMonths.IndexOf(SelectedMonth);
+
     // ── Visibility flags ──────────────────────────────────────────────────────
     public bool IsFinancialOverviewVisible              => SelectedReportType == "Financial Overview";
     public bool IsConsolidatedAnalyticsVisible          => SelectedReportType == "Consolidated Transactions Analytics";
@@ -74,191 +115,22 @@ public class ReportsViewModel : ViewModelBase
     // ── Shared ────────────────────────────────────────────────────────────────
     public Func<double, string> CurrencyFormatter { get; } = v => v.ToString("C0");
 
-    // ── Financial Overview (from DashboardViewModel) ─────────────────────────
-    private decimal _totalBudget;
-    public decimal TotalBudget { get => _totalBudget; set { _totalBudget = value; OnPropertyChanged(); } }
-
-    private decimal _totalExpenses;
-    public decimal TotalExpenses { get => _totalExpenses; set { _totalExpenses = value; OnPropertyChanged(); } }
-
-    private int _activeUsers;
-    public int ActiveUsers { get => _activeUsers; set { _activeUsers = value; OnPropertyChanged(); } }
-
-    private int _totalProjects;
-    public int TotalProjects { get => _totalProjects; set { _totalProjects = value; OnPropertyChanged(); } }
-
-    private SeriesCollection _deptBudgetSeries = new();
-    public SeriesCollection DeptBudgetSeries { get => _deptBudgetSeries; set { _deptBudgetSeries = value; OnPropertyChanged(); } }
-
-    private SeriesCollection _projectBudgetSeries = new();
-    public SeriesCollection ProjectBudgetSeries { get => _projectBudgetSeries; set { _projectBudgetSeries = value; OnPropertyChanged(); } }
-
-    // ── Consolidated Analytics ────────────────────────────────────────────────
-    private int _consolidatedTotalCount;
-    public int ConsolidatedTotalCount { get => _consolidatedTotalCount; set { _consolidatedTotalCount = value; OnPropertyChanged(); } }
-
-    private decimal _consolidatedTotalAmount;
-    public decimal ConsolidatedTotalAmount { get => _consolidatedTotalAmount; set { _consolidatedTotalAmount = value; OnPropertyChanged(); } }
-
-    private decimal _consolidatedAvgAmount;
-    public decimal ConsolidatedAvgAmount { get => _consolidatedAvgAmount; set { _consolidatedAvgAmount = value; OnPropertyChanged(); } }
-
-    private SeriesCollection _consolidatedTypeSeries = new();
-    public SeriesCollection ConsolidatedTypeSeries { get => _consolidatedTypeSeries; set { _consolidatedTypeSeries = value; OnPropertyChanged(); } }
-
-    private SeriesCollection _consolidatedMonthlySeries = new();
-    public SeriesCollection ConsolidatedMonthlySeries { get => _consolidatedMonthlySeries; set { _consolidatedMonthlySeries = value; OnPropertyChanged(); } }
-
-    private ObservableCollection<string> _consolidatedMonthlyLabels = new();
-    public ObservableCollection<string> ConsolidatedMonthlyLabels { get => _consolidatedMonthlyLabels; set { _consolidatedMonthlyLabels = value; OnPropertyChanged(); } }
-
-    // ── CRS Analytics ─────────────────────────────────────────────────────────
-    private int _crsTotalCount;
-    public int CrsTotalCount { get => _crsTotalCount; set { _crsTotalCount = value; OnPropertyChanged(); } }
-
-    private int _crsPwdCount;
-    public int CrsPwdCount { get => _crsPwdCount; set { _crsPwdCount = value; OnPropertyChanged(); } }
-
-    private int _crsSeniorCount;
-    public int CrsSeniorCount { get => _crsSeniorCount; set { _crsSeniorCount = value; OnPropertyChanged(); } }
-
-    private SeriesCollection _crsGenderSeries = new();
-    public SeriesCollection CrsGenderSeries { get => _crsGenderSeries; set { _crsGenderSeries = value; OnPropertyChanged(); } }
-
-    private SeriesCollection _crsAgeGroupSeries = new();
-    public SeriesCollection CrsAgeGroupSeries { get => _crsAgeGroupSeries; set { _crsAgeGroupSeries = value; OnPropertyChanged(); } }
-
-    private ObservableCollection<string> _crsAgeGroupLabels = new()
-    {
-        "0–17", "18–35", "36–60", "60+"
-    };
-    public ObservableCollection<string> CrsAgeGroupLabels { get => _crsAgeGroupLabels; set { _crsAgeGroupLabels = value; OnPropertyChanged(); } }
-
-    // ── Existing report collections ───────────────────────────────────────────
-    private ObservableCollection<SystemLog>  _userActivityLogs    = new();
-    public ObservableCollection<SystemLog>   UserActivityLogs     { get => _userActivityLogs;    set { _userActivityLogs    = value; OnPropertyChanged(); } }
-
-    private ObservableCollection<object>     _budgetSummaries     = new();
-    public ObservableCollection<object>      BudgetSummaries      { get => _budgetSummaries;     set { _budgetSummaries     = value; OnPropertyChanged(); } }
-
-    private ObservableCollection<TblTransaction> _transactionHistory = new();
-    public ObservableCollection<TblTransaction>  TransactionHistory  { get => _transactionHistory;  set { _transactionHistory  = value; OnPropertyChanged(); } }
-
-    private ObservableCollection<Parameter> _parametersList       = new();
-    public ObservableCollection<Parameter>  ParametersList        { get => _parametersList;       set { _parametersList       = value; OnPropertyChanged(); } }
-
-    private ObservableCollection<object>    _departmentalBudgets  = new();
-    public ObservableCollection<object>     DepartmentalBudgets   { get => _departmentalBudgets;  set { _departmentalBudgets  = value; OnPropertyChanged(); } }
-
-    private ObservableCollection<object>    _systemOverview       = new();
-    public ObservableCollection<object>     SystemOverview        { get => _systemOverview;       set { _systemOverview       = value; OnPropertyChanged(); } }
-
-    // ── Beneficiaries per Project ─────────────────────────────────────────────
-    private ObservableCollection<object> _beneficiariesPerProject = new();
-    public ObservableCollection<object>  BeneficiariesPerProject  { get => _beneficiariesPerProject; set { _beneficiariesPerProject = value; OnPropertyChanged(); } }
-
-    private SeriesCollection _bppBarSeries = new();
-    public SeriesCollection  BppBarSeries  { get => _bppBarSeries; set { _bppBarSeries = value; OnPropertyChanged(); } }
-
-    private ObservableCollection<string> _bppBarLabels = new();
-    public ObservableCollection<string>  BppBarLabels  { get => _bppBarLabels; set { _bppBarLabels = value; OnPropertyChanged(); } }
-
-    // ── Individual Beneficiaries Services Received ────────────────────────────
-    private ObservableCollection<object> _individualBeneficiaries = new();
-    public ObservableCollection<object>  IndividualBeneficiaries  { get => _individualBeneficiaries; set { _individualBeneficiaries = value; OnPropertyChanged(); } }
-
-    // ── Budget Utilization Report ─────────────────────────────────────────────
-    private ObservableCollection<object> _budgetUtilization = new();
-    public ObservableCollection<object>  BudgetUtilization  { get => _budgetUtilization; set { _budgetUtilization = value; OnPropertyChanged(); } }
-
-    private SeriesCollection _budgetUtilSeries = new();
-    public SeriesCollection  BudgetUtilSeries  { get => _budgetUtilSeries; set { _budgetUtilSeries = value; OnPropertyChanged(); } }
-
-    private ObservableCollection<string> _budgetUtilLabels = new();
-    public ObservableCollection<string>  BudgetUtilLabels  { get => _budgetUtilLabels; set { _budgetUtilLabels = value; OnPropertyChanged(); } }
-
-    // ── Project Implementation Status Report ──────────────────────────────────
-    private ObservableCollection<object> _projectStatusRows = new();
-    public ObservableCollection<object>  ProjectStatusRows  { get => _projectStatusRows; set { _projectStatusRows = value; OnPropertyChanged(); } }
-
-    private SeriesCollection _projectStatusSeries = new();
-    public SeriesCollection  ProjectStatusSeries  { get => _projectStatusSeries; set { _projectStatusSeries = value; OnPropertyChanged(); } }
-
-    private int _activeProjectCount;
-    public int ActiveProjectCount { get => _activeProjectCount; set { _activeProjectCount = value; OnPropertyChanged(); } }
-
-    private int _closedProjectCount;
-    public int ClosedProjectCount { get => _closedProjectCount; set { _closedProjectCount = value; OnPropertyChanged(); } }
-
-    // ── Public Service Delivery Report ────────────────────────────────────────
-    private ObservableCollection<object> _publicServiceRows = new();
-    public ObservableCollection<object>  PublicServiceRows  { get => _publicServiceRows; set { _publicServiceRows = value; OnPropertyChanged(); } }
-
-    private SeriesCollection _publicServiceSeries = new();
-    public SeriesCollection  PublicServiceSeries  { get => _publicServiceSeries; set { _publicServiceSeries = value; OnPropertyChanged(); } }
-
-    private ObservableCollection<string> _publicServiceLabels = new();
-    public ObservableCollection<string>  PublicServiceLabels  { get => _publicServiceLabels; set { _publicServiceLabels = value; OnPropertyChanged(); } }
-
-    // ── Citizen Feedback Summary Report ──────────────────────────────────────
-    private ObservableCollection<object> _citizenFeedbackRows = new();
-    public ObservableCollection<object>  CitizenFeedbackRows  { get => _citizenFeedbackRows; set { _citizenFeedbackRows = value; OnPropertyChanged(); } }
-
-    private double _avgFeedbackScore;
-    public double AvgFeedbackScore { get => _avgFeedbackScore; set { _avgFeedbackScore = value; OnPropertyChanged(); } }
-
-    private int _totalFeedbackCount;
-    public int TotalFeedbackCount  { get => _totalFeedbackCount; set { _totalFeedbackCount = value; OnPropertyChanged(); } }
-
-    private SeriesCollection _feedbackScoreSeries = new();
-    public SeriesCollection  FeedbackScoreSeries  { get => _feedbackScoreSeries; set { _feedbackScoreSeries = value; OnPropertyChanged(); } }
-
-    private ObservableCollection<string> _feedbackScoreLabels = new();
-    public ObservableCollection<string>  FeedbackScoreLabels  { get => _feedbackScoreLabels; set { _feedbackScoreLabels = value; OnPropertyChanged(); } }
-
-    // ── Beneficiary Master List ───────────────────────────────────────────────
-    private ObservableCollection<object> _beneficiaryMasterList = new();
-    public ObservableCollection<object>  BeneficiaryMasterList  { get => _beneficiaryMasterList; set { _beneficiaryMasterList = value; OnPropertyChanged(); } }
-
-    private int _bmlTotalBeneficiaries;
-    public int BmlTotalBeneficiaries { get => _bmlTotalBeneficiaries; set { _bmlTotalBeneficiaries = value; OnPropertyChanged(); } }
-
-    private decimal _bmlTotalAmount;
-    public decimal BmlTotalAmount { get => _bmlTotalAmount; set { _bmlTotalAmount = value; OnPropertyChanged(); } }
-
-    private int _bmlPwdCount;
-    public int BmlPwdCount { get => _bmlPwdCount; set { _bmlPwdCount = value; OnPropertyChanged(); } }
-
-    private int _bmlSeniorCount;
-    public int BmlSeniorCount { get => _bmlSeniorCount; set { _bmlSeniorCount = value; OnPropertyChanged(); } }
-
-    private SeriesCollection _bmlGenderSeries = new();
-    public SeriesCollection  BmlGenderSeries  { get => _bmlGenderSeries; set { _bmlGenderSeries = value; OnPropertyChanged(); } }
-
-    private SeriesCollection _bmlClassificationSeries = new();
-    public SeriesCollection  BmlClassificationSeries  { get => _bmlClassificationSeries; set { _bmlClassificationSeries = value; OnPropertyChanged(); } }
-
-    private SeriesCollection _bmlTopBeneficiarySeries = new();
-    public SeriesCollection  BmlTopBeneficiarySeries  { get => _bmlTopBeneficiarySeries; set { _bmlTopBeneficiarySeries = value; OnPropertyChanged(); } }
-
-    private ObservableCollection<string> _bmlTopBeneficiaryLabels = new();
-    public ObservableCollection<string>  BmlTopBeneficiaryLabels  { get => _bmlTopBeneficiaryLabels; set { _bmlTopBeneficiaryLabels = value; OnPropertyChanged(); } }
-
-    private SeriesCollection _bmlMonthlyTrendSeries = new();
-    public SeriesCollection  BmlMonthlyTrendSeries  { get => _bmlMonthlyTrendSeries; set { _bmlMonthlyTrendSeries = value; OnPropertyChanged(); } }
-
-    private ObservableCollection<string> _bmlMonthlyTrendLabels = new();
-    public ObservableCollection<string>  BmlMonthlyTrendLabels  { get => _bmlMonthlyTrendLabels; set { _bmlMonthlyTrendLabels = value; OnPropertyChanged(); } }
+    public Reports.FinancialReportsViewModel Financial { get; } = new();
+    public Reports.TransactionReportsViewModel Transaction { get; } = new();
+    public Reports.BeneficiaryReportsViewModel Beneficiary { get; } = new();
+    public Reports.ProjectReportsViewModel Project { get; } = new();
+    public Reports.SystemReportsViewModel SystemReports { get; } = new();
 
     // ── Commands ──────────────────────────────────────────────────────────────
     public ICommand GenerateReportCommand { get; }
     public ICommand PrintExportCommand    { get; }
 
     // ── Constructor ───────────────────────────────────────────────────────────
-    public ReportsViewModel()
+    public ReportsViewModel(AppDbContext context, GoodGovernanceApp.Services.IConnectivityService connectivityService, GoodGovernanceApp.Data.IDatabaseConfig dbConfig)
     {
-        try { _context = App.AppHost!.Services.GetRequiredService<AppDbContext>(); }
-        catch { }
+        _context = context;
+        _connectivityService = connectivityService;
+        _databaseConfig = dbConfig;
 
         GenerateReportCommand = new RelayCommand(async _ => await GenerateReportAsync());
         PrintExportCommand    = new RelayCommand(_ =>
@@ -312,11 +184,13 @@ public class ReportsViewModel : ViewModelBase
                     break;
 
                 case "User Activity Log":
-                    var logs = await _context.SystemLogs
-                        .Include(l => l.User)
-                        .OrderByDescending(l => l.Timestamp)
-                        .ToListAsync();
-                    UserActivityLogs = new ObservableCollection<SystemLog>(logs);
+                    int? ualYear = GetSelectedYear();
+                    int? ualMonth = GetSelectedMonth();
+                    var logsQuery = _context.SystemLogs.Include(l => l.User).AsQueryable();
+                    if (ualYear.HasValue) logsQuery = logsQuery.Where(l => l.Timestamp.Year == ualYear.Value);
+                    if (ualMonth.HasValue) logsQuery = logsQuery.Where(l => l.Timestamp.Month == ualMonth.Value);
+                    var logs = await logsQuery.OrderByDescending(l => l.Timestamp).ToListAsync();
+                    SystemReports.UserActivityLogs = new ObservableCollection<SystemLog>(logs);
                     break;
 
                 case "Budget Summary by Category":
@@ -333,19 +207,22 @@ public class ReportsViewModel : ViewModelBase
                         TotalExpenses    = totalExpenses,
                         RemainingBalance = c.Budgets.Sum(b => b.Amount) - totalExpenses
                     }).ToList();
-                    BudgetSummaries = new ObservableCollection<object>(summaries);
+                    Financial.BudgetSummaries = new ObservableCollection<object>(summaries);
                     break;
 
                 case "Transaction History":
-                    var txns = await _context.TblTransactions
-                        .OrderByDescending(t => t.TransactionDate)
-                        .ToListAsync();
-                    TransactionHistory = new ObservableCollection<TblTransaction>(txns);
+                    int? txYear = GetSelectedYear();
+                    int? txMonth = GetSelectedMonth();
+                    var txQuery = _context.TblTransactions.AsQueryable();
+                    if (txYear.HasValue) txQuery = txQuery.Where(t => t.TransactionDate.HasValue && t.TransactionDate.Value.Year == txYear.Value);
+                    if (txMonth.HasValue) txQuery = txQuery.Where(t => t.TransactionDate.HasValue && t.TransactionDate.Value.Month == txMonth.Value);
+                    var txns = await txQuery.OrderByDescending(t => t.TransactionDate).ToListAsync();
+                    Transaction.TransactionHistory = new ObservableCollection<TblTransaction>(txns);
                     break;
 
                 case "Parameters List":
                     var @params = await _context.Parameters.OrderBy(p => p.Name).ToListAsync();
-                    ParametersList = new ObservableCollection<Parameter>(@params);
+                    SystemReports.ParametersList = new ObservableCollection<Parameter>(@params);
                     break;
 
                 case "Office Budget Allocation":
@@ -356,26 +233,40 @@ public class ReportsViewModel : ViewModelBase
                     var officesList = await _context.Offices.ToListAsync();
                     var officeSummaries = allocations.Select(a => new
                     {
-                        DepartmentName = a.Office?.Name ?? officesList.FirstOrDefault(o => o.Id == a.OfficeId)?.Name ?? "Unknown",
+                        DepartmentName = officesList.FirstOrDefault(o => o.OfficeCode == a.OfficeCode)?.Name ?? "Unassigned",
                         Year           = a.MasterBudget?.FiscalYear ?? "N/A",
                         Allocated      = a.AllocatedAmount,
                     }).OrderBy(a => a.DepartmentName).ToList();
-                    DepartmentalBudgets = new ObservableCollection<object>(officeSummaries);
+                    Financial.DepartmentalBudgets = new ObservableCollection<object>(officeSummaries);
                     break;
 
                 case "System Overview":
+                    int? sysYear = GetSelectedYear();
+                    int? sysMonth = GetSelectedMonth();
+
+                    var expQuery = _context.TblTransactions.Where(t => t.TransactionType == "Expense" || t.TransactionType == "disbursement");
+                    if (sysYear.HasValue) expQuery = expQuery.Where(t => t.TransactionDate.HasValue && t.TransactionDate.Value.Year == sysYear.Value);
+                    if (sysMonth.HasValue) expQuery = expQuery.Where(t => t.TransactionDate.HasValue && t.TransactionDate.Value.Month == sysMonth.Value);
+                    var totalExp = await expQuery.SumAsync(t => t.Amount);
+
+                    var txCountQuery = _context.TblTransactions.AsQueryable();
+                    if (sysYear.HasValue) txCountQuery = txCountQuery.Where(t => t.TransactionDate.HasValue && t.TransactionDate.Value.Year == sysYear.Value);
+                    if (sysMonth.HasValue) txCountQuery = txCountQuery.Where(t => t.TransactionDate.HasValue && t.TransactionDate.Value.Month == sysMonth.Value);
+
+                    var cTxQuery = _context.ConsolidatedTransactions.AsQueryable();
+                    if (sysYear.HasValue) cTxQuery = cTxQuery.Where(t => t.TransactionDate.HasValue && t.TransactionDate.Value.Year == sysYear.Value);
+                    if (sysMonth.HasValue) cTxQuery = cTxQuery.Where(t => t.TransactionDate.HasValue && t.TransactionDate.Value.Month == sysMonth.Value);
+
                     var totalUsers     = await _context.Users.CountAsync();
                     var totalBudget    = await _context.Budgets.SumAsync(b => b.Amount);
-                    var totalExp       = await _context.TblTransactions
-                        .Where(t => t.TransactionType == "Expense" || t.TransactionType == "disbursement")
-                        .SumAsync(t => t.Amount);
-                    var totalConsolidated = await _context.ConsolidatedTransactions.CountAsync();
-                    SystemOverview = new ObservableCollection<object>
+                    var totalConsolidated = await cTxQuery.CountAsync();
+
+                    SystemReports.SystemOverview = new ObservableCollection<object>
                     {
                         new { Metric = "Total Registered Users",          Value = totalUsers.ToString() },
                         new { Metric = "Total Budget Allocated",          Value = totalBudget.ToString("C") },
                         new { Metric = "Total Expenses (Dept)",           Value = totalExp.ToString("C") },
-                        new { Metric = "Total Dept Transactions",         Value = (await _context.TblTransactions.CountAsync()).ToString() },
+                        new { Metric = "Total Dept Transactions",         Value = (await txCountQuery.CountAsync()).ToString() },
                         new { Metric = "Total Consolidated Transactions", Value = totalConsolidated.ToString() },
                     };
                     break;
@@ -428,64 +319,70 @@ public class ReportsViewModel : ViewModelBase
     // ── Financial Overview ────────────────────────────────────────────────────
     private async Task LoadFinancialOverviewAsync()
     {
-        TotalBudget    = await _context.MasterBudgets.SumAsync(b => b.TotalAmount);
-        TotalExpenses  = await _context.TblTransactions.SumAsync(t => t.Amount);
-        ActiveUsers    = await _context.Users.CountAsync(u => u.Status == "active");
-        TotalProjects  = await _context.ProjectDetails.CountAsync(p => p.Status == "active");
+        int? fYear = GetSelectedYear();
+        int? fMonth = GetSelectedMonth();
 
-        // Dept budget distribution pie
-        var officeData = await _context.BudgetAllocations
-            .Include(a => a.Office)
-            .GroupBy(a => a.Office!.Name)
-            .Select(g => new { Name = g.Key ?? "Unknown", Amount = (double)g.Sum(a => a.AllocatedAmount) })
-            .ToListAsync();
+        // Total Budget (Filtered by Year)
+        var mbQuery = _context.MasterBudgets.AsQueryable();
+        if (fYear.HasValue) mbQuery = mbQuery.Where(b => b.FiscalYear == fYear.Value.ToString());
+        Financial.TotalBudget = await mbQuery.SumAsync(b => b.TotalAmount);
 
-        var deptSeries = new SeriesCollection();
+        // Total Expenses (Filtered by Year & Month)
+        var txQuery = _context.TblTransactions.AsQueryable();
+        if (fYear.HasValue) txQuery = txQuery.Where(t => t.TransactionDate.HasValue && t.TransactionDate.Value.Year == fYear.Value);
+        if (fMonth.HasValue) txQuery = txQuery.Where(t => t.TransactionDate.HasValue && t.TransactionDate.Value.Month == fMonth.Value);
+        Financial.TotalExpenses = await txQuery.SumAsync(t => t.Amount);
+
+        Financial.ActiveUsers    = await _context.Users.CountAsync(u => u.Status == "active");
+        Financial.TotalProjects  = await _context.ProjectDetails.CountAsync(p => p.Status == "active");
+
+        // Dept budget distribution pie (Filtered by Year)
+        var allocQuery = _context.BudgetAllocations.Include(a => a.Office).Include(a => a.MasterBudget).AsQueryable();
+        if (fYear.HasValue) allocQuery = allocQuery.Where(a => a.MasterBudget != null && a.MasterBudget.FiscalYear == fYear.Value.ToString());
+        
+        var allocs = await allocQuery.ToListAsync();
+        var offices = await _context.Offices.ToListAsync();
+
+        var officeData = allocs
+            .GroupBy(a => offices.FirstOrDefault(o => o.OfficeCode == a.OfficeCode)?.Name ?? "Unassigned")
+            .Select(g => new { Name = g.Key, Amount = (double)g.Sum(a => a.AllocatedAmount) })
+            .ToList();
+
+        var deptSeries = new ObservableCollection<ISeries>();
         foreach (var d in officeData)
-            deptSeries.Add(new PieSeries { Title = d.Name, Values = new ChartValues<double> { d.Amount }, DataLabels = true });
-        DeptBudgetSeries = deptSeries;
+            deptSeries.Add(new PieSeries<double> { Name = d.Name, Values = new double[] { d.Amount }, DataLabelsFormatter = point => point.Model.ToString() });
+        Financial.DeptBudgetSeries = deptSeries;
 
-        // Project budget pie
-        var currentYear = DateTime.Now.Year;
-        var projectData = await _context.ProjectDetails
-            .Where(p => p.Status == "active")
-            .Join(_context.MasterBudgets,
-                p => p.MasterBudgetId, y => y.Id,
-                (p, y) => new { p, y })
-            .Where(x => x.y.FiscalYear == currentYear.ToString())
-            .GroupBy(x => x.p.Name)
-            .Select(g => new { Name = g.Key, Amount = (double)g.Sum(x => x.p.Budget ?? 0) })
-            .ToListAsync();
-
-        var projSeries = new SeriesCollection();
-        foreach (var p in projectData)
-            projSeries.Add(new PieSeries { Title = p.Name, Values = new ChartValues<double> { p.Amount }, DataLabels = true });
-        ProjectBudgetSeries = projSeries;
     }
 
     // ── Consolidated Transactions Analytics ───────────────────────────────────
     private async Task LoadConsolidatedAnalyticsAsync()
     {
-        var all = await _context.ConsolidatedTransactions.ToListAsync();
+        int? cYear = GetSelectedYear();
+        int? cMonth = GetSelectedMonth();
+        var allQuery = _context.ConsolidatedTransactions.AsQueryable();
+        if (cYear.HasValue) allQuery = allQuery.Where(ct => ct.TransactionDate.HasValue && ct.TransactionDate.Value.Year == cYear.Value);
+        if (cMonth.HasValue) allQuery = allQuery.Where(ct => ct.TransactionDate.HasValue && ct.TransactionDate.Value.Month == cMonth.Value);
+        var all = await allQuery.ToListAsync();
 
-        ConsolidatedTotalCount  = all.Count;
-        ConsolidatedTotalAmount = all.Sum(ct => ct.Amount ?? 0);
-        ConsolidatedAvgAmount   = ConsolidatedTotalCount > 0
-            ? ConsolidatedTotalAmount / ConsolidatedTotalCount : 0;
+        Transaction.ConsolidatedTotalCount  = all.Count;
+        Transaction.ConsolidatedTotalAmount = all.Sum(ct => ct.Amount ?? 0);
+        Transaction.ConsolidatedAvgAmount   = Transaction.ConsolidatedTotalCount > 0
+            ? Transaction.ConsolidatedTotalAmount / Transaction.ConsolidatedTotalCount : 0;
 
         // Pie — by transaction type
-        var typeSeries = new SeriesCollection();
-        foreach (var grp in all.GroupBy(ct => ct.TransactionType ?? "Unknown")
+        var typeSeries = new ObservableCollection<ISeries>();
+        foreach (var grp in all.GroupBy(ct => ct.TransactionType ?? "Unassigned")
                                .Select(g => new { Type = g.Key, Amount = g.Sum(x => x.Amount ?? 0) }))
         {
-            typeSeries.Add(new PieSeries
+            typeSeries.Add(new PieSeries<double>
             {
-                Title      = grp.Type,
-                Values     = new ChartValues<decimal> { grp.Amount },
-                DataLabels = true
+                Name       = grp.Type,
+                Values     = new double[] { (double)grp.Amount },
+                DataLabelsFormatter = point => point.Model.ToString()
             });
         }
-        ConsolidatedTypeSeries = typeSeries;
+        Transaction.ConsolidatedTypeSeries = typeSeries;
 
         // Bar — monthly trend
         var monthly = all
@@ -499,14 +396,14 @@ public class ReportsViewModel : ViewModelBase
             })
             .ToList();
 
-        var monthValues = new ChartValues<decimal>();
+        var monthValues = new ObservableCollection<double>();
         var monthLabels = new ObservableCollection<string>();
-        foreach (var m in monthly) { monthValues.Add(m.Amount); monthLabels.Add(m.Label); }
+        foreach (var m in monthly) { monthValues.Add((double)m.Amount); monthLabels.Add(m.Label); }
 
-        ConsolidatedMonthlyLabels = monthLabels;
-        ConsolidatedMonthlySeries = new SeriesCollection
+        Transaction.ConsolidatedMonthlyLabels = monthLabels;
+        Transaction.ConsolidatedMonthlySeries = new ObservableCollection<ISeries>
         {
-            new ColumnSeries { Title = "Monthly Amount", Values = monthValues }
+            new ColumnSeries<double> { Name = "Monthly Amount", Values = monthValues }
         };
     }
 
@@ -515,9 +412,9 @@ public class ReportsViewModel : ViewModelBase
     {
         try
         {
-            if (GoodGovernanceApp.Services.ConnectivityService.IsCrsOnline)
+            if (_connectivityService.IsCrsOnline)
             {
-                using var conn = new MySqlConnector.MySqlConnection(DatabaseConfig.CrsConnectionString);
+                using var conn = new MySqlConnector.MySqlConnection(_databaseConfig.CrsConnectionString);
                 await conn.OpenAsync();
 
                 // Aggregate query — count, PWD, senior, gender, age groups
@@ -539,20 +436,20 @@ public class ReportsViewModel : ViewModelBase
 
                 if (await reader.ReadAsync())
                 {
-                    CrsTotalCount  = reader.GetInt32("total");
-                    CrsPwdCount    = reader.GetInt32("pwd_count");
-                    CrsSeniorCount = reader.GetInt32("senior_count");
+                    Beneficiary.CrsTotalCount  = reader.GetInt32("total");
+                    Beneficiary.CrsPwdCount    = reader.GetInt32("pwd_count");
+                    Beneficiary.CrsSeniorCount = reader.GetInt32("senior_count");
 
                     int male   = reader.GetInt32("male_count");
                     int female = reader.GetInt32("female_count");
-                    int other  = CrsTotalCount - male - female;
+                    int other  = Beneficiary.CrsTotalCount - male - female;
 
                     // Gender pie
-                    var genderSeries = new SeriesCollection();
-                    if (male   > 0) genderSeries.Add(new PieSeries { Title = "Male",   Values = new ChartValues<int> { male },   DataLabels = true });
-                    if (female > 0) genderSeries.Add(new PieSeries { Title = "Female", Values = new ChartValues<int> { female }, DataLabels = true });
-                    if (other  > 0) genderSeries.Add(new PieSeries { Title = "Other",  Values = new ChartValues<int> { other },  DataLabels = true });
-                    CrsGenderSeries = genderSeries;
+                    var genderSeries = new ObservableCollection<ISeries>();
+                    if (male   > 0) genderSeries.Add(new PieSeries<int> { Name = "Male",   Values = new int[] { male },   DataLabelsFormatter = point => point.Model.ToString() });
+                    if (female > 0) genderSeries.Add(new PieSeries<int> { Name = "Female", Values = new int[] { female }, DataLabelsFormatter = point => point.Model.ToString() });
+                    if (other  > 0) genderSeries.Add(new PieSeries<int> { Name = "Other",  Values = new int[] { other },  DataLabelsFormatter = point => point.Model.ToString() });
+                    Beneficiary.CrsGenderSeries = genderSeries;
 
                     // Age histogram
                     var ageCounts = new int[]
@@ -562,12 +459,12 @@ public class ReportsViewModel : ViewModelBase
                         reader.GetInt32("age_36_60"),
                         reader.GetInt32("age_60_plus")
                     };
-                    var ageValues = new ChartValues<int>(ageCounts);
-                    CrsAgeGroupSeries = new SeriesCollection
+                    var ageValues = new ObservableCollection<int>(ageCounts);
+                    Beneficiary.CrsAgeGroupSeries = new ObservableCollection<ISeries>
                     {
-                        new ColumnSeries
+                        new ColumnSeries<int>
                         {
-                            Title  = "Beneficiaries",
+                            Name   = "Beneficiaries",
                             Values = ageValues
                         }
                     };
@@ -578,19 +475,19 @@ public class ReportsViewModel : ViewModelBase
                 // OFFLINE MODE
                 var cache = await _context.CrsBeneficiaryCaches.ToListAsync();
 
-                CrsTotalCount = cache.Count;
-                CrsPwdCount = cache.Count(c => c.IsPwd);
-                CrsSeniorCount = cache.Count(c => c.IsSenior);
+                Beneficiary.CrsTotalCount = cache.Count;
+                Beneficiary.CrsPwdCount = cache.Count(c => c.IsPwd);
+                Beneficiary.CrsSeniorCount = cache.Count(c => c.IsSenior);
 
                 int male = cache.Count(c => string.Equals(c.Sex, "male", StringComparison.OrdinalIgnoreCase));
                 int female = cache.Count(c => string.Equals(c.Sex, "female", StringComparison.OrdinalIgnoreCase));
-                int other = CrsTotalCount - male - female;
+                int other = Beneficiary.CrsTotalCount - male - female;
 
-                var genderSeries = new SeriesCollection();
-                if (male > 0) genderSeries.Add(new PieSeries { Title = "Male", Values = new ChartValues<int> { male }, DataLabels = true });
-                if (female > 0) genderSeries.Add(new PieSeries { Title = "Female", Values = new ChartValues<int> { female }, DataLabels = true });
-                if (other > 0) genderSeries.Add(new PieSeries { Title = "Other", Values = new ChartValues<int> { other }, DataLabels = true });
-                CrsGenderSeries = genderSeries;
+                var genderSeries = new ObservableCollection<ISeries>();
+                if (male > 0) genderSeries.Add(new PieSeries<int> { Name = "Male", Values = new int[] { male }, DataLabelsFormatter = point => point.Model.ToString() });
+                if (female > 0) genderSeries.Add(new PieSeries<int> { Name = "Female", Values = new int[] { female }, DataLabelsFormatter = point => point.Model.ToString() });
+                if (other > 0) genderSeries.Add(new PieSeries<int> { Name = "Other", Values = new int[] { other }, DataLabelsFormatter = point => point.Model.ToString() });
+                Beneficiary.CrsGenderSeries = genderSeries;
 
                 var ageCounts = new int[]
                 {
@@ -599,12 +496,12 @@ public class ReportsViewModel : ViewModelBase
                     cache.Count(c => c.Age >= 36 && c.Age <= 60),
                     cache.Count(c => c.Age > 60)
                 };
-                CrsAgeGroupSeries = new SeriesCollection
+                Beneficiary.CrsAgeGroupSeries = new ObservableCollection<ISeries>
                 {
-                    new ColumnSeries
+                    new ColumnSeries<int>
                     {
-                        Title = "Beneficiaries (Cached)",
-                        Values = new ChartValues<int>(ageCounts)
+                        Name = "Beneficiaries (Cached)",
+                        Values = ageCounts
                     }
                 };
             }
@@ -622,8 +519,13 @@ public class ReportsViewModel : ViewModelBase
     // ── Beneficiaries per Project ─────────────────────────────────────────────
     private async Task LoadBeneficiariesPerProjectAsync()
     {
-        var rows = await _context.ConsolidatedTransactions
-            .Where(ct => ct.ProjectName != null)
+        int? bpYear = GetSelectedYear();
+        int? bpMonth = GetSelectedMonth();
+        var bpQuery = _context.ConsolidatedTransactions.Where(ct => ct.ProjectName != null);
+        if (bpYear.HasValue) bpQuery = bpQuery.Where(ct => ct.TransactionDate.HasValue && ct.TransactionDate.Value.Year == bpYear.Value);
+        if (bpMonth.HasValue) bpQuery = bpQuery.Where(ct => ct.TransactionDate.HasValue && ct.TransactionDate.Value.Month == bpMonth.Value);
+
+        var rows = await bpQuery
             .GroupBy(ct => new { ct.ProjectName, ct.ProjectCode })
             .Select(g => new
             {
@@ -636,39 +538,45 @@ public class ReportsViewModel : ViewModelBase
             .OrderByDescending(x => x.BeneficiaryCount)
             .ToListAsync();
 
-        BeneficiariesPerProject = new ObservableCollection<object>(rows.Cast<object>());
+        Beneficiary.BeneficiariesPerProject = new ObservableCollection<object>(rows.Cast<object>());
 
         // Bar chart
-        var barValues = new ChartValues<int>(rows.Select(r => r.BeneficiaryCount));
+        var barValues = new ObservableCollection<int>(rows.Select(r => r.BeneficiaryCount));
         var barLabels = new ObservableCollection<string>(rows.Select(r =>
             r.ProjectName.Length > 20 ? r.ProjectName[..20] + "…" : r.ProjectName));
 
-        BppBarLabels = barLabels;
-        BppBarSeries = new SeriesCollection
+        Beneficiary.BppBarLabels = barLabels;
+        Beneficiary.BppBarSeries = new ObservableCollection<ISeries>
         {
-            new ColumnSeries { Title = "Beneficiaries", Values = barValues }
+            new ColumnSeries<int> { Name = "Beneficiaries", Values = barValues }
         };
     }
 
     // ── Individual Beneficiaries Services Received ────────────────────────────
     private async Task LoadIndividualBeneficiariesAsync()
     {
-        var rows = await _context.ConsolidatedTransactions
-            .Where(ct => ct.BeneficiaryId != null)
+        int? ibYear = GetSelectedYear();
+        int? ibMonth = GetSelectedMonth();
+        var ibQuery = _context.ConsolidatedTransactions.Where(ct => ct.BeneficiaryId != null);
+        if (ibYear.HasValue) ibQuery = ibQuery.Where(ct => ct.TransactionDate.HasValue && ct.TransactionDate.Value.Year == ibYear.Value);
+        if (ibMonth.HasValue) ibQuery = ibQuery.Where(ct => ct.TransactionDate.HasValue && ct.TransactionDate.Value.Month == ibMonth.Value);
+
+        var rows = await ibQuery
             .GroupBy(ct => new { ct.BeneficiaryId, ct.FullName })
             .Select(g => new
             {
                 BeneficiaryId    = g.Key.BeneficiaryId ?? "",
-                FullName         = g.Key.FullName ?? "(unknown)",
+                FullName         = g.Key.FullName ?? "(unassigned)",
                 ServicesReceived = g.Select(x => x.TransactionType).Distinct().Count(),
                 TotalTransactions= g.Count(),
                 TotalAmount      = g.Sum(x => x.Amount ?? 0),
                 LastServiceDate  = g.Max(x => x.TransactionDate)
             })
-            .OrderByDescending(x => x.TotalAmount)
             .ToListAsync();
 
-        IndividualBeneficiaries = new ObservableCollection<object>(rows.Cast<object>());
+        var sortedRows = rows.OrderByDescending(x => x.TotalAmount).ToList();
+
+        Beneficiary.IndividualBeneficiaries = new ObservableCollection<object>(sortedRows.Cast<object>());
     }
 
     // ── Budget Utilization Report ─────────────────────────────────────────────
@@ -683,8 +591,14 @@ public class ReportsViewModel : ViewModelBase
             .Select(p => p.ProjectDetailsID!)
             .ToList();
 
-        var spentByCode = await _context.ConsolidatedTransactions
-            .Where(t => t.ProjectCode != null && projectCodes.Contains(t.ProjectCode) && (t.TransactionType == "Expense" || t.TransactionType == "disbursement"))
+        int? buYear = GetSelectedYear();
+        int? buMonth = GetSelectedMonth();
+        var buTxQuery = _context.ConsolidatedTransactions
+            .Where(t => t.ProjectCode != null && projectCodes.Contains(t.ProjectCode) && (t.TransactionType == "Expense" || t.TransactionType == "disbursement"));
+        if (buYear.HasValue) buTxQuery = buTxQuery.Where(t => t.TransactionDate.HasValue && t.TransactionDate.Value.Year == buYear.Value);
+        if (buMonth.HasValue) buTxQuery = buTxQuery.Where(t => t.TransactionDate.HasValue && t.TransactionDate.Value.Month == buMonth.Value);
+
+        var spentByCode = await buTxQuery
             .GroupBy(t => t.ProjectCode)
             .Select(g => new { Code = g.Key!, Spent = g.Sum(x => x.Amount ?? 0) })
             .ToListAsync();
@@ -707,19 +621,19 @@ public class ReportsViewModel : ViewModelBase
             };
         }).OrderByDescending(x => x.UtilizationPct).ToList();
 
-        BudgetUtilization = new ObservableCollection<object>(rows.Cast<object>());
+        Financial.BudgetUtilization = new ObservableCollection<object>(rows.Cast<object>());
 
         // Stacked bar: Budget vs Spent per project
-        var budgetVals = new ChartValues<decimal>(rows.Select(r => r.Budget));
-        var spentVals  = new ChartValues<decimal>(rows.Select(r => r.Spent));
+        var budgetVals = new ObservableCollection<double>(rows.Select(r => (double)r.Budget));
+        var spentVals  = new ObservableCollection<double>(rows.Select(r => (double)r.Spent));
         var labels     = new ObservableCollection<string>(rows.Select(r =>
             r.ProjectName.Length > 18 ? r.ProjectName[..18] + "…" : r.ProjectName));
 
-        BudgetUtilLabels = labels;
-        BudgetUtilSeries = new SeriesCollection
+        Financial.BudgetUtilLabels = labels;
+        Financial.BudgetUtilSeries = new ObservableCollection<ISeries>
         {
-            new StackedColumnSeries { Title = "Budget",  Values = budgetVals, Fill = System.Windows.Media.Brushes.SteelBlue  },
-            new StackedColumnSeries { Title = "Spent",   Values = spentVals,  Fill = System.Windows.Media.Brushes.Tomato     }
+            new StackedColumnSeries<double> { Name = "Budget",  Values = budgetVals, Fill = new SolidColorPaint(SKColors.SteelBlue)  },
+            new StackedColumnSeries<double> { Name = "Spent",   Values = spentVals,  Fill = new SolidColorPaint(SKColors.Tomato)     }
         };
     }
 
@@ -733,8 +647,14 @@ public class ReportsViewModel : ViewModelBase
             .Select(p => p.ProjectDetailsID!)
             .ToList();
 
-        var spentByCode = await _context.ConsolidatedTransactions
-            .Where(t => t.ProjectCode != null && projectCodes.Contains(t.ProjectCode) && (t.TransactionType == "Expense" || t.TransactionType == "disbursement"))
+        int? psYear = GetSelectedYear();
+        int? psMonth = GetSelectedMonth();
+        var psTxQuery = _context.ConsolidatedTransactions
+            .Where(t => t.ProjectCode != null && projectCodes.Contains(t.ProjectCode) && (t.TransactionType == "Expense" || t.TransactionType == "disbursement"));
+        if (psYear.HasValue) psTxQuery = psTxQuery.Where(t => t.TransactionDate.HasValue && t.TransactionDate.Value.Year == psYear.Value);
+        if (psMonth.HasValue) psTxQuery = psTxQuery.Where(t => t.TransactionDate.HasValue && t.TransactionDate.Value.Month == psMonth.Value);
+
+        var spentByCode = await psTxQuery
             .GroupBy(t => t.ProjectCode)
             .Select(g => new { Code = g.Key!, Spent = g.Sum(x => x.Amount ?? 0) })
             .ToListAsync();
@@ -758,26 +678,32 @@ public class ReportsViewModel : ViewModelBase
             };
         }).OrderBy(x => x.Status).ThenByDescending(x => x.Budget).ToList();
 
-        ProjectStatusRows = new ObservableCollection<object>(rows.Cast<object>());
+        Project.ProjectStatusRows = new ObservableCollection<object>(rows.Cast<object>());
 
-        ActiveProjectCount = rows.Count(r => r.Status == "active");
-        ClosedProjectCount = rows.Count(r => r.Status != "active");
+        Project.ActiveProjectCount = rows.Count(r => r.Status == "active");
+        Project.ClosedProjectCount = rows.Count(r => r.Status != "active");
 
-        ProjectStatusSeries = new SeriesCollection
+        Project.ProjectStatusSeries = new ObservableCollection<ISeries>
         {
-            new PieSeries { Title = "Active", Values = new ChartValues<int> { ActiveProjectCount }, DataLabels = true },
-            new PieSeries { Title = "Closed", Values = new ChartValues<int> { ClosedProjectCount }, DataLabels = true }
+            new PieSeries<int> { Name = "Active", Values = new int[] { Project.ActiveProjectCount }, DataLabelsFormatter = point => point.Model.ToString() },
+            new PieSeries<int> { Name = "Closed", Values = new int[] { Project.ClosedProjectCount }, DataLabelsFormatter = point => point.Model.ToString() }
         };
     }
 
     // ── Public Service Delivery Report ────────────────────────────────────────
     private async Task LoadPublicServiceDeliveryAsync()
     {
-        var rows = await _context.ConsolidatedTransactions
+        int? psdYear = GetSelectedYear();
+        int? psdMonth = GetSelectedMonth();
+        var psdQuery = _context.ConsolidatedTransactions.AsQueryable();
+        if (psdYear.HasValue) psdQuery = psdQuery.Where(ct => ct.TransactionDate.HasValue && ct.TransactionDate.Value.Year == psdYear.Value);
+        if (psdMonth.HasValue) psdQuery = psdQuery.Where(ct => ct.TransactionDate.HasValue && ct.TransactionDate.Value.Month == psdMonth.Value);
+
+        var rows = await psdQuery
             .GroupBy(ct => new { ct.OfficeName, ct.OfficeId })
             .Select(g => new
             {
-                OfficeName       = g.Key.OfficeName ?? g.Key.OfficeId ?? "Unknown Office",
+                OfficeName       = g.Key.OfficeName ?? g.Key.OfficeId ?? "Unassigned Office",
                 BeneficiaryCount = g.Select(x => x.BeneficiaryId).Distinct().Count(),
                 TotalAmount      = g.Sum(x => x.Amount ?? 0),
                 TransactionCount = g.Count()
@@ -785,31 +711,35 @@ public class ReportsViewModel : ViewModelBase
             .OrderByDescending(x => x.BeneficiaryCount)
             .ToListAsync();
 
-        PublicServiceRows = new ObservableCollection<object>(rows.Cast<object>());
+        Transaction.PublicServiceRows = new ObservableCollection<object>(rows.Cast<object>());
 
         // Bar chart — beneficiaries served per office
-        var vals   = new ChartValues<int>(rows.Select(r => r.BeneficiaryCount));
+        var vals   = new ObservableCollection<int>(rows.Select(r => r.BeneficiaryCount));
         var labels = new ObservableCollection<string>(rows.Select(r =>
             r.OfficeName.Length > 18 ? r.OfficeName[..18] + "…" : r.OfficeName));
 
-        PublicServiceLabels = labels;
-        PublicServiceSeries = new SeriesCollection
+        Transaction.PublicServiceLabels = labels;
+        Transaction.PublicServiceSeries = new ObservableCollection<ISeries>
         {
-            new ColumnSeries { Title = "Beneficiaries Served", Values = vals }
+            new ColumnSeries<int> { Name = "Beneficiaries Served", Values = vals }
         };
     }
 
     // ── Citizen Feedback Summary Report ──────────────────────────────────────
     private async Task LoadCitizenFeedbackAsync()
     {
-        var evals = await _context.Evaluations
-            .Include(e => e.Evaluator)
-            .Include(e => e.UploadedFile)
+        int? fbYear = GetSelectedYear();
+        int? fbMonth = GetSelectedMonth();
+        var evalQuery = _context.Evaluations.Include(e => e.Evaluator).Include(e => e.UploadedFile).AsQueryable();
+        if (fbYear.HasValue) evalQuery = evalQuery.Where(e => e.EvaluationDate.Year == fbYear.Value);
+        if (fbMonth.HasValue) evalQuery = evalQuery.Where(e => e.EvaluationDate.Month == fbMonth.Value);
+
+        var evals = await evalQuery
             .OrderByDescending(e => e.EvaluationDate)
             .ToListAsync();
 
-        TotalFeedbackCount = evals.Count;
-        AvgFeedbackScore   = evals.Count > 0 ? Math.Round(evals.Average(e => (double)e.Score), 1) : 0;
+        SystemReports.TotalFeedbackCount = evals.Count;
+        SystemReports.AvgFeedbackScore   = evals.Count > 0 ? Math.Round(evals.Average(e => (double)e.Score), 1) : 0;
 
         var rows = evals.Select(e => new
         {
@@ -821,7 +751,7 @@ public class ReportsViewModel : ViewModelBase
             Comments  = e.Comments ?? ""
         }).ToList();
 
-        CitizenFeedbackRows = new ObservableCollection<object>(rows.Cast<object>());
+        SystemReports.CitizenFeedbackRows = new ObservableCollection<object>(rows.Cast<object>());
 
         // Bar chart: score distribution buckets
         int excellent = evals.Count(e => e.Score >= 90);
@@ -829,13 +759,13 @@ public class ReportsViewModel : ViewModelBase
         int fair      = evals.Count(e => e.Score >= 60 && e.Score < 75);
         int poor      = evals.Count(e => e.Score < 60);
 
-        FeedbackScoreLabels = new ObservableCollection<string> { "Excellent (90+)", "Good (75–89)", "Fair (60–74)", "Poor (<60)" };
-        FeedbackScoreSeries = new SeriesCollection
+        SystemReports.FeedbackScoreLabels = new ObservableCollection<string> { "Excellent (90+)", "Good (75–89)", "Fair (60–74)", "Poor (<60)" };
+        SystemReports.FeedbackScoreSeries = new ObservableCollection<ISeries>
         {
-            new ColumnSeries
+            new ColumnSeries<int>
             {
-                Title  = "Evaluations",
-                Values = new ChartValues<int> { excellent, good, fair, poor }
+                Name  = "Evaluations",
+                Values = new int[] { excellent, good, fair, poor }
             }
         };
     }
@@ -844,8 +774,13 @@ public class ReportsViewModel : ViewModelBase
     private async Task LoadBeneficiaryMasterListAsync()
     {
         // Step 1: Aggregate beneficiary transaction summaries from consolidated_transactions
-        var txSummaries = await _context.ConsolidatedTransactions
-            .Where(ct => ct.BeneficiaryId != null)
+        int? bmYear = GetSelectedYear();
+        int? bmMonth = GetSelectedMonth();
+        var bmQuery = _context.ConsolidatedTransactions.Where(ct => ct.BeneficiaryId != null);
+        if (bmYear.HasValue) bmQuery = bmQuery.Where(ct => ct.TransactionDate.HasValue && ct.TransactionDate.Value.Year == bmYear.Value);
+        if (bmMonth.HasValue) bmQuery = bmQuery.Where(ct => ct.TransactionDate.HasValue && ct.TransactionDate.Value.Month == bmMonth.Value);
+
+        var txSummaries = await bmQuery
             .GroupBy(ct => new
             {
                 ct.BeneficiaryId,
@@ -877,12 +812,12 @@ public class ReportsViewModel : ViewModelBase
         // Dictionary: beneficiaryId -> (Sex, Age, Address, MaritalStatus, IsPwd, IsSenior)
         var profileDict = new Dictionary<string, (string Sex, string Age, string Address, string MaritalStatus, bool IsPwd, bool IsSenior)>(StringComparer.OrdinalIgnoreCase);
 
-        if (GoodGovernanceApp.Services.ConnectivityService.IsCrsOnline)
+        if (_connectivityService.IsCrsOnline)
         {
             // ── Online: fetch from CRS MySQL ────────────────────────────────
             try
             {
-                using var conn = new MySqlConnector.MySqlConnection(DatabaseConfig.CrsConnectionString);
+                using var conn = new MySqlConnector.MySqlConnection(_databaseConfig.CrsConnectionString);
                 await conn.OpenAsync();
 
                 // Build parameterised IN clause
@@ -946,7 +881,7 @@ public class ReportsViewModel : ViewModelBase
             return new
             {
                 BeneficiaryId     = t.BeneficiaryId,
-                FullName          = string.IsNullOrWhiteSpace(t.FullName) ? "(unknown)" : t.FullName,
+                FullName          = string.IsNullOrWhiteSpace(t.FullName) ? "(unassigned)" : t.FullName,
                 Sex               = p.Sex           ?? "",
                 Age               = p.Age           ?? "",
                 Address           = p.Address       ?? "",
@@ -967,24 +902,24 @@ public class ReportsViewModel : ViewModelBase
             };
         }).OrderByDescending(r => r.TotalAmount).ToList();
 
-        BeneficiaryMasterList = new ObservableCollection<object>(masterRows.Cast<object>());
+        Beneficiary.BeneficiaryMasterList = new ObservableCollection<object>(masterRows.Cast<object>());
 
         // Step 4: KPIs
-        BmlTotalBeneficiaries = masterRows.Count;
-        BmlTotalAmount        = masterRows.Sum(r => r.TotalAmount);
-        BmlPwdCount           = masterRows.Count(r => r._IsPwd);
-        BmlSeniorCount        = masterRows.Count(r => r._IsSenior);
+        Beneficiary.BmlTotalBeneficiaries = masterRows.Count;
+        Beneficiary.BmlTotalAmount        = masterRows.Sum(r => r.TotalAmount);
+        Beneficiary.BmlPwdCount           = masterRows.Count(r => r._IsPwd);
+        Beneficiary.BmlSeniorCount        = masterRows.Count(r => r._IsSenior);
 
         // Step 5: Gender pie chart
         int male   = masterRows.Count(r => r._Sex == "male");
         int female = masterRows.Count(r => r._Sex == "female");
         int other  = masterRows.Count - male - female;
 
-        var genderSeries = new SeriesCollection();
-        if (male   > 0) genderSeries.Add(new PieSeries { Title = "Male",   Values = new ChartValues<int> { male },   DataLabels = true });
-        if (female > 0) genderSeries.Add(new PieSeries { Title = "Female", Values = new ChartValues<int> { female }, DataLabels = true });
-        if (other  > 0) genderSeries.Add(new PieSeries { Title = "Other",  Values = new ChartValues<int> { other },  DataLabels = true });
-        BmlGenderSeries = genderSeries;
+        var genderSeries = new ObservableCollection<ISeries>();
+        if (male   > 0) genderSeries.Add(new PieSeries<int> { Name = "Male",   Values = new int[] { male },   DataLabelsFormatter = point => point.Model.ToString() });
+        if (female > 0) genderSeries.Add(new PieSeries<int> { Name = "Female", Values = new int[] { female }, DataLabelsFormatter = point => point.Model.ToString() });
+        if (other  > 0) genderSeries.Add(new PieSeries<int> { Name = "Other",  Values = new int[] { other },  DataLabelsFormatter = point => point.Model.ToString() });
+        Beneficiary.BmlGenderSeries = genderSeries;
 
         // Step 6: Classification pie chart (PWD / Senior / Regular)
         int pwdOnly    = masterRows.Count(r => r._IsPwd && !r._IsSenior);
@@ -992,23 +927,23 @@ public class ReportsViewModel : ViewModelBase
         int both       = masterRows.Count(r => r._IsPwd && r._IsSenior);
         int regular    = masterRows.Count(r => !r._IsPwd && !r._IsSenior);
 
-        var classSeries = new SeriesCollection();
-        if (pwdOnly    > 0) classSeries.Add(new PieSeries { Title = "PWD Only",       Values = new ChartValues<int> { pwdOnly    }, DataLabels = true });
-        if (seniorOnly > 0) classSeries.Add(new PieSeries { Title = "Senior Only",    Values = new ChartValues<int> { seniorOnly }, DataLabels = true });
-        if (both       > 0) classSeries.Add(new PieSeries { Title = "PWD & Senior",   Values = new ChartValues<int> { both       }, DataLabels = true });
-        if (regular    > 0) classSeries.Add(new PieSeries { Title = "Regular",        Values = new ChartValues<int> { regular    }, DataLabels = true });
-        BmlClassificationSeries = classSeries;
+        var classSeries = new ObservableCollection<ISeries>();
+        if (pwdOnly    > 0) classSeries.Add(new PieSeries<int> { Name = "PWD Only",       Values = new int[] { pwdOnly    }, DataLabelsFormatter = point => point.Model.ToString() });
+        if (seniorOnly > 0) classSeries.Add(new PieSeries<int> { Name = "Senior Only",    Values = new int[] { seniorOnly }, DataLabelsFormatter = point => point.Model.ToString() });
+        if (both       > 0) classSeries.Add(new PieSeries<int> { Name = "PWD & Senior",   Values = new int[] { both       }, DataLabelsFormatter = point => point.Model.ToString() });
+        if (regular    > 0) classSeries.Add(new PieSeries<int> { Name = "Regular",        Values = new int[] { regular    }, DataLabelsFormatter = point => point.Model.ToString() });
+        Beneficiary.BmlClassificationSeries = classSeries;
 
         // Step 7: Top 10 by total amount — bar chart
         var top10 = masterRows.Take(10).ToList();
-        BmlTopBeneficiaryLabels = new ObservableCollection<string>(
+        Beneficiary.BmlTopBeneficiaryLabels = new ObservableCollection<string>(
             top10.Select(r => r.FullName.Length > 20 ? r.FullName[..20] + "…" : r.FullName));
-        BmlTopBeneficiarySeries = new SeriesCollection
+        Beneficiary.BmlTopBeneficiarySeries = new ObservableCollection<ISeries>
         {
-            new ColumnSeries
+            new ColumnSeries<double>
             {
-                Title  = "Total Amount (₱)",
-                Values = new ChartValues<decimal>(top10.Select(r => r.TotalAmount))
+                Name  = "Total Amount (₱)",
+                Values = new ObservableCollection<double>(top10.Select(r => (double)r.TotalAmount))
             }
         };
 
@@ -1025,20 +960,22 @@ public class ReportsViewModel : ViewModelBase
             })
             .ToListAsync();
 
-        BmlMonthlyTrendLabels = new ObservableCollection<string>(monthly.Select(m =>
+        Beneficiary.BmlMonthlyTrendLabels = new ObservableCollection<string>(monthly.Select(m =>
         {
             if (DateTime.TryParse(m.Label + "-01", out var dt))
                 return dt.ToString("MMM yy");
             return m.Label;
         }));
-        BmlMonthlyTrendSeries = new SeriesCollection
+        Beneficiary.BmlMonthlyTrendSeries = new ObservableCollection<ISeries>
         {
-            new ColumnSeries
+            new ColumnSeries<int>
             {
-                Title  = "Transactions",
-                Values = new ChartValues<int>(monthly.Select(m => m.Count)),
-                Fill   = System.Windows.Media.Brushes.CornflowerBlue
+                Name  = "Transactions",
+                Values = new ObservableCollection<int>(monthly.Select(m => m.Count)),
+                Fill   = new SolidColorPaint(SKColors.CornflowerBlue)
             }
         };
     }
 }
+
+

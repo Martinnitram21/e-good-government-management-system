@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
@@ -16,6 +16,9 @@ namespace GoodGovernanceApp.ViewModels;
 
 public class FileUploadViewModel : ViewModelBase
 {
+#pragma warning disable CS8618
+    public FileUploadViewModel() { }
+#pragma warning restore CS8618
     private readonly AppDbContext _context;
     private readonly FileService _fileService;
 
@@ -94,10 +97,10 @@ public class FileUploadViewModel : ViewModelBase
     public ICommand UploadFileCommand { get; }
     public ICommand DeleteFileCommand { get; }
 
-    public FileUploadViewModel()
+    public FileUploadViewModel(AppDbContext context, FileService fileService)
     {
-        _context = App.AppHost!.Services.GetRequiredService<AppDbContext>();
-        _fileService = new FileService();
+        _context = context;
+        _fileService = fileService;
 
         SelectFileCommand = new RelayCommand(_ => ExecuteSelectFile());
         UploadFileCommand = new RelayCommand(async _ => await ExecuteUploadFile(), _ => CanUpload());

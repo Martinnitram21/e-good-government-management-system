@@ -9,9 +9,7 @@
              mc:Ignorable="d" 
              d:DesignHeight="600" d:DesignWidth="800">
              
-    <UserControl.DataContext>
-        <viewmodels:ParametersViewModel />
-    </UserControl.DataContext>
+
 
     <UserControl.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVis" />

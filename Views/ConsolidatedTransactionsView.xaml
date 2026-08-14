@@ -8,10 +8,6 @@
              mc:Ignorable="d"
              d:DesignHeight="700" d:DesignWidth="1100">
 
-    <UserControl.DataContext>
-        <viewmodels:ConsolidatedTransactionsPageViewModel />
-    </UserControl.DataContext>
-
     <UserControl.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVis"/>
     </UserControl.Resources>

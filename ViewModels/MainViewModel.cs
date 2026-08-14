@@ -188,6 +188,22 @@ public class MainViewModel : ViewModelBase
         set { _syncStatus = value; OnPropertyChanged(); }
     }
 
+    private int _syncErrorCount = 0;
+    public int SyncErrorCount
+    {
+        get => _syncErrorCount;
+        set { _syncErrorCount = value; OnPropertyChanged(); OnPropertyChanged(nameof(HasSyncErrors)); }
+    }
+
+    public bool HasSyncErrors => SyncErrorCount > 0;
+
+    private List<string> _lastSyncErrors = new();
+    public List<string> LastSyncErrors
+    {
+        get => _lastSyncErrors;
+        set { _lastSyncErrors = value; OnPropertyChanged(); }
+    }
+
     // ── commands ──────────────────────────────────────────────────────────────
     public ICommand LogoutCommand        { get; }
     public ICommand OpenAppProfileCommand{ get; }
@@ -198,11 +214,21 @@ public class MainViewModel : ViewModelBase
     public ICommand NotificationClickedCommand { get; }
     public ICommand OpenNotificationsCommand   { get; }
     public ICommand SyncNowCommand             { get; }
+    public ICommand ViewSyncLogCommand         { get; }
+
+    private readonly DatabaseHelper _dbHelper;
+    private readonly IServiceProvider _serviceProvider;
+    private readonly GoodGovernanceApp.Services.IConnectivityService _connectivityService;
+    private readonly GoodGovernanceApp.Services.ISyncService _syncService;
 
     // ── constructor ───────────────────────────────────────────────────────────
-    public MainViewModel()
+    public MainViewModel(Services.SessionService sessionService, DatabaseHelper dbHelper, IServiceProvider serviceProvider, GoodGovernanceApp.Services.IConnectivityService connectivityService, GoodGovernanceApp.Services.ISyncService syncService)
     {
-        _sessionService = App.AppHost!.Services.GetRequiredService<Services.SessionService>();
+        _sessionService = sessionService;
+        _dbHelper = dbHelper;
+        _serviceProvider = serviceProvider;
+        _connectivityService = connectivityService;
+        _syncService = syncService;
 
         // Live clock
         CurrentDate = DateTime.Now.ToString("dddd, MMMM dd, yyyy  •  hh:mm tt");
@@ -213,28 +239,44 @@ public class MainViewModel : ViewModelBase
         }, null, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(30));
 
         // Sync Events
-        GoodGovernanceApp.Services.ConnectivityService.OnConnectionStatusChanged += (isOnline) =>
+        _connectivityService.OnConnectionStatusChanged += (isOnline) =>
         {
             Application.Current?.Dispatcher.Invoke(() => IsOnline = isOnline);
         };
-        GoodGovernanceApp.Services.SyncService.OnSyncStatusChanged += (isSyncing) =>
+        _syncService.OnSyncStatusChanged += (isSyncing) =>
         {
             Application.Current?.Dispatcher.Invoke(() => IsSyncing = isSyncing);
         };
-        GoodGovernanceApp.Services.SyncService.OnSyncProgress += (msg) =>
+        _syncService.OnSyncProgress += (msg) =>
         {
             Application.Current?.Dispatcher.Invoke(() => SyncStatus = msg);
         };
+        _syncService.OnSyncErrorsCollected += (errors) =>
+        {
+            Application.Current?.Dispatcher.Invoke(() =>
+            {
+                SyncErrorCount = errors.Count;
+                LastSyncErrors = errors;
+            });
+        };
 
         // Seed the initial state from whatever ConnectivityService already knows
-        IsOnline   = GoodGovernanceApp.Services.ConnectivityService.IsOnline;
+        IsOnline   = _connectivityService.IsOnline;
         SyncStatus = "Checking...";
 
         // Ask ConnectivityService to push its current status to all subscribers immediately
-        GoodGovernanceApp.Services.ConnectivityService.SyncCurrentStatus();
+        _connectivityService.SyncCurrentStatus();
 
         // Commands
-        SyncNowCommand = new RelayCommand(async _ => await GoodGovernanceApp.Services.SyncService.SyncNowAsync(), _ => IsOnline && !IsSyncing);
+        SyncNowCommand = new RelayCommand(async _ => await _syncService.SyncNowAsync(), _ => IsOnline && !IsSyncing);
+        ViewSyncLogCommand = new RelayCommand(_ =>
+        {
+            string logPath = System.IO.Path.Combine(AppContext.BaseDirectory, "Logs", "sync_log.txt");
+            if (System.IO.File.Exists(logPath))
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(logPath) { UseShellExecute = true });
+            else
+                MessageBox.Show("No sync log file found yet. A log will be created after the first sync.", "Sync Log", MessageBoxButton.OK, MessageBoxImage.Information);
+        });
         OpenAppProfileCommand = new RelayCommand(ExecuteOpenAppProfile);
         OpenSystemsProfileCommand = new RelayCommand(ExecuteOpenSystemsProfile);
         LogoutCommand         = new RelayCommand(ExecuteLogout);
@@ -278,7 +320,9 @@ public class MainViewModel : ViewModelBase
         var role = _sessionService.CurrentUser?.Role;
         IEnumerable<NavigationItem> filtered;
 
-        if (role == "SuperAdmin" || role == "Admin")
+        if (string.Equals(role, "super_admin", System.StringComparison.OrdinalIgnoreCase) || 
+            string.Equals(role, "SuperAdmin", System.StringComparison.OrdinalIgnoreCase) || 
+            role == "Admin")
         {
             filtered = allItems;
         }
@@ -305,7 +349,7 @@ public class MainViewModel : ViewModelBase
 
         if (viewToken == "BudgetAllocation")
         {
-            var dialog = new Views.BudgetYearSelectionWindow();
+            var dialog = new Views.BudgetYearSelectionWindow { DataContext = _serviceProvider.GetRequiredService<BudgetYearSelectionViewModel>() };
             var result = dialog.ShowDialog();
             if (result == true && dialog.DataContext is BudgetYearSelectionViewModel vm && vm.SelectedMasterBudget != null)
             {
@@ -361,7 +405,7 @@ public class MainViewModel : ViewModelBase
         switch (viewToken)
         {
             case "Dashboard":
-                CurrentView = new Views.DashboardView();
+                CurrentView = _serviceProvider.GetRequiredService<DashboardViewModel>();
                 break;
             case "Home":
                 IsShowingDashboard  = true;
@@ -369,68 +413,64 @@ public class MainViewModel : ViewModelBase
                 CurrentView         = null!;
                 break;
             case "Profile":
-                CurrentView = new Views.ProfileView();
+                CurrentView = _serviceProvider.GetRequiredService<ProfileViewModel>();
                 break;
             case "Users":
-                CurrentView = new Views.UserManagementView();
+                CurrentView = _serviceProvider.GetRequiredService<UserManagementViewModel>();
                 break;
             case "Parameters":
-                CurrentView = new Views.ParametersView();
+                CurrentView = _serviceProvider.GetRequiredService<ParametersViewModel>();
                 break;
             case "Transactions":
-                CurrentView = new Views.BudgetTransactionsView();
+                CurrentView = _serviceProvider.GetRequiredService<BudgetTransactionsViewModel>();
                 break;
             case "ConsolidatedTransactions":
-                var consolidatedView = new Views.ConsolidatedTransactionsView();
-                if (parameter is (string mode, string value) &&
-                    consolidatedView.DataContext is ConsolidatedTransactionsPageViewModel ctVm)
+                var ctVm = _serviceProvider.GetRequiredService<ConsolidatedTransactionsPageViewModel>();
+                if (parameter is (string mode, string value))
                 {
                     ctVm.ApplyInitialSearch(mode, value);
                 }
-                CurrentView = consolidatedView;
+                CurrentView = ctVm;
                 break;
             case "Reports":
-                CurrentView = new Views.ReportsView();
+                CurrentView = _serviceProvider.GetRequiredService<ReportsViewModel>();
                 break;
             case "BudgetAllocation":
-                var allocationView = new Views.BudgetAllocationView();
-                if (allocationView.DataContext is BudgetAllocationViewModel allocVm)
+                var allocVm = _serviceProvider.GetRequiredService<BudgetAllocationViewModel>();
+                if (parameter is Models.MasterBudget selectedBudget)
                 {
-                    if (parameter is Models.MasterBudget selectedBudget)
-                    {
-                        allocVm.InitializeWithBudget(selectedBudget);
-                    }
-                    else if (parameter is string officeCode)
-                    {
-                        allocVm.ActivateForOffice(officeCode);
-                    }
+                    allocVm.InitializeWithBudget(selectedBudget);
                 }
-                CurrentView = allocationView;
+                else if (parameter is string officeCode)
+                {
+                    allocVm.ActivateForOffice(officeCode);
+                }
+                CurrentView = allocVm;
                 break;
             case "CrsBeneficiary":
-                CurrentView = new Views.CrsBeneficiaryView();
+                CurrentView = _serviceProvider.GetRequiredService<CrsBeneficiaryViewModel>();
                 break;
             case "Settings":
-                CurrentView = new Views.SettingsView();
+                CurrentView = _serviceProvider.GetRequiredService<SettingsViewModel>();
                 break;
             case "Departments":
-                CurrentView = new Views.DepartmentManagementView();
+                CurrentView = _serviceProvider.GetRequiredService<DepartmentManagementViewModel>();
                 break;
             case "FileUpload":
-                CurrentView = new Views.FileUploadView();
+                CurrentView = _serviceProvider.GetRequiredService<FileUploadViewModel>();
                 break;
             case "Evaluation":
-                CurrentView = new Views.EvaluationView();
+                CurrentView = _serviceProvider.GetRequiredService<EvaluationViewModel>();
                 break;
             case "AuditLog":
-                CurrentView = new Views.AuditLogView();
+                CurrentView = _serviceProvider.GetRequiredService<AuditLogViewModel>();
                 break;
             default:
                 CurrentView = new System.Windows.Controls.TextBlock
                 {
                     Text = viewToken + " – coming soon",
                     FontSize = 24,
-                    Foreground = System.Windows.Media.Brushes.White,
+                    Foreground = System.Windows.Media.Brushes.Black,
                     HorizontalAlignment = HorizontalAlignment.Center,
                     VerticalAlignment   = VerticalAlignment.Center
                 };
@@ -443,9 +483,8 @@ public class MainViewModel : ViewModelBase
     {
         try
         {
-            var dbHelper = App.AppHost!.Services.GetRequiredService<GoodGovernanceApp.Data.DatabaseHelper>();
             string query = $"SELECT profile_photo FROM users WHERE Id = {_sessionService.CurrentUser?.Id};";
-            var dataTable = await dbHelper.ExecuteQueryAsync(query);
+            var dataTable = await _dbHelper.ExecuteQueryAsync(query);
 
             if (dataTable.Rows.Count > 0)
             {
@@ -473,9 +512,8 @@ public class MainViewModel : ViewModelBase
     {
         try
         {
-            var dbHelper = App.AppHost!.Services.GetRequiredService<GoodGovernanceApp.Data.DatabaseHelper>();
             string query = "SELECT GoveName, Address FROM goveprofile LIMIT 1;";
-            var dataTable = await dbHelper.ExecuteQueryAsync(query);
+            var dataTable = await _dbHelper.ExecuteQueryAsync(query);
 
             if (dataTable.Rows.Count > 0)
             {
@@ -554,20 +592,8 @@ public class MainViewModel : ViewModelBase
     {
         try
         {
-            var dbHelper = App.AppHost!.Services.GetRequiredService<DatabaseHelper>();
-
-            // ✅ ADD THIS — create table first before querying
-            string createTableQuery = @"
-            CREATE TABLE IF NOT EXISTS goveprofile (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                GoveName NVARCHAR(255),
-                Address NVARCHAR(255),
-                LogoAddress NVARCHAR(500)
-            );";
-            await dbHelper.ExecuteNonQueryAsync(createTableQuery);
-
             string query = "SELECT GoveName, LogoAddress, Address FROM goveprofile LIMIT 1;";
-            var dataTable = await dbHelper.ExecuteQueryAsync(query);
+            var dataTable = await _dbHelper.ExecuteQueryAsync(query);
 
             if (dataTable.Rows.Count > 0)
             {
@@ -614,12 +640,11 @@ public class MainViewModel : ViewModelBase
     {
         try
         {
-            var dbHelper = App.AppHost!.Services.GetRequiredService<GoodGovernanceApp.Data.DatabaseHelper>();
             var notifications = new List<AppNotification>();
 
             // Query TblTransaction (Budget Transactions)
             string budgetQuery = "SELECT id, amount, description, created_at FROM tbl_transaction ORDER BY created_at DESC LIMIT 5;";
-            var budgetData = await dbHelper.ExecuteQueryAsync(budgetQuery);
+            var budgetData = await _dbHelper.ExecuteQueryAsync(budgetQuery);
             foreach (System.Data.DataRow row in budgetData.Rows)
             {
                 if (row["created_at"] is DateTime date)
@@ -638,7 +663,7 @@ public class MainViewModel : ViewModelBase
 
             // Query ConsolidatedTransactions
             string consolidatedQuery = "SELECT id, amount, transaction_type, created_at FROM consolidated_transactions ORDER BY created_at DESC LIMIT 5;";
-            var consolidatedData = await dbHelper.ExecuteQueryAsync(consolidatedQuery);
+            var consolidatedData = await _dbHelper.ExecuteQueryAsync(consolidatedQuery);
             foreach (System.Data.DataRow row in consolidatedData.Rows)
             {
                 if (row["created_at"] is DateTime date)
@@ -685,7 +710,7 @@ public class MainViewModel : ViewModelBase
         _clockTimer.Dispose();
         _sessionService.ClearSession();
 
-        var loginWindow = App.AppHost!.Services.GetService(typeof(Views.LoginWindow)) as Views.LoginWindow;
+        var loginWindow = _serviceProvider.GetService(typeof(Views.LoginWindow)) as Views.LoginWindow;
         loginWindow!.Show();
 
         var window = parameter as System.Windows.Window
@@ -696,13 +721,16 @@ public class MainViewModel : ViewModelBase
     // ── app profile window ────────────────────────────────────────────────────
     private void ExecuteOpenAppProfile(object? parameter)
     {
-        var window = new Views.ApplicationProfileWindow();
+        var window = new Views.ApplicationProfileWindow
+        {
+            DataContext = _serviceProvider.GetRequiredService<GoodGovernanceApp.ViewModels.ApplicationProfileViewModel>()
+        };
         window.ShowDialog();
     }
 
     private void ExecuteOpenSystemsProfile(object? parameter)
     {
-        var window = new Views.SystemsApplicationProfile();
+        var window = new Views.SystemsApplicationProfile { DataContext = _serviceProvider.GetRequiredService<SystemsApplicationProfileViewModel>() };
         window.ShowDialog();
     }
 }

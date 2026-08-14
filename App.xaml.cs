@@ -12,8 +12,8 @@ using System.Threading;
 namespace GoodGovernanceApp;
 
 public partial class App : Application
-{
-    public static IHost? AppHost { get; private set; }
+    {
+            public static IHost? AppHost { get; private set; }
     public static IConfiguration Config { get; set; } = null!;
 
     public App()
@@ -74,7 +74,8 @@ public partial class App : Application
                 {
                     try
                     {
-                        var connStr = DatabaseConfig.ConnectionString;
+                        var dbConfig = serviceProvider.GetRequiredService<IDatabaseConfig>();
+                        var connStr = dbConfig.ConnectionString;
                         options.UseMySql(connStr, new MySqlServerVersion(new Version(8, 0, 31)));
                     }
                     catch
@@ -85,15 +86,52 @@ public partial class App : Application
                     }
                 }, ServiceLifetime.Transient, ServiceLifetime.Transient);
 
+                services.AddSingleton<IDatabaseConfig, DatabaseConfig>();
+                services.AddSingleton<GoodGovernanceApp.Services.IConnectivityService, GoodGovernanceApp.Services.ConnectivityService>();
+                services.AddSingleton<GoodGovernanceApp.Services.ISyncService, GoodGovernanceApp.Services.SyncService>();
+                services.AddSingleton<GoodGovernanceApp.Services.IBackupSchedulerService, GoodGovernanceApp.Services.BackupSchedulerService>();
+
                 services.AddSingleton<DatabaseHelper>();
                 services.AddSingleton<GoodGovernanceApp.Services.ValidationService>();
                 services.AddSingleton<GoodGovernanceApp.Services.SessionService>();
                 services.AddSingleton<GoodGovernanceApp.Services.FileService>();
                 services.AddSingleton<GoodGovernanceApp.Services.BackupService>();
+                services.AddSingleton<GoodGovernanceApp.Services.EmailService>();
+                services.AddSingleton<GoodGovernanceApp.Services.OtpService>();
+                services.AddTransient<GoodGovernanceApp.Services.ICrsBeneficiaryService, GoodGovernanceApp.Services.CrsBeneficiaryService>();
 
                 services.AddTransient<MainWindow>();
                 services.AddTransient<GoodGovernanceApp.Views.LoginWindow>();
                 services.AddTransient<GoodGovernanceApp.ViewModels.LoginViewModel>();
+                services.AddTransient<GoodGovernanceApp.ViewModels.AddProjectViewModel>();
+                services.AddTransient<GoodGovernanceApp.ViewModels.ApplicationProfileViewModel>();
+                services.AddTransient<GoodGovernanceApp.ViewModels.AuditLogViewModel>();
+                services.AddTransient<GoodGovernanceApp.ViewModels.BudgetAllocationViewModel>();
+                services.AddTransient<GoodGovernanceApp.ViewModels.BudgetTransactionsViewModel>();
+                services.AddTransient<GoodGovernanceApp.ViewModels.BudgetYearSelectionViewModel>();
+                services.AddTransient<GoodGovernanceApp.ViewModels.ConsolidatedTransactionsPageViewModel>();
+                services.AddTransient<GoodGovernanceApp.ViewModels.ConsolidatedTransactionsViewModel>();
+                services.AddTransient<GoodGovernanceApp.ViewModels.CopyrightProfileViewModel>();
+                services.AddTransient<GoodGovernanceApp.ViewModels.CrsBeneficiaryViewModel>();
+                services.AddTransient<GoodGovernanceApp.ViewModels.DashboardViewModel>();
+                services.AddTransient<GoodGovernanceApp.ViewModels.DepartmentManagementViewModel>();
+                services.AddTransient<GoodGovernanceApp.ViewModels.EvaluationViewModel>();
+                services.AddTransient<GoodGovernanceApp.ViewModels.FileUploadViewModel>();
+                services.AddTransient<GoodGovernanceApp.ViewModels.MainViewModel>();
+                services.AddTransient<GoodGovernanceApp.ViewModels.ParametersViewModel>();
+                services.AddTransient<GoodGovernanceApp.ViewModels.ProfileViewModel>();
+                services.AddTransient<GoodGovernanceApp.ViewModels.ProjectDetailsViewModel>();
+                services.AddTransient<GoodGovernanceApp.ViewModels.ReportsViewModel>();
+                services.AddTransient<GoodGovernanceApp.ViewModels.Reports.BeneficiaryReportsViewModel>();
+                services.AddTransient<GoodGovernanceApp.ViewModels.Reports.FinancialReportsViewModel>();
+                services.AddTransient<GoodGovernanceApp.ViewModels.Reports.ProjectReportsViewModel>();
+                services.AddTransient<GoodGovernanceApp.ViewModels.Reports.SystemReportsViewModel>();
+                services.AddTransient<GoodGovernanceApp.ViewModels.Reports.TransactionReportsViewModel>();
+                services.AddTransient<GoodGovernanceApp.ViewModels.SettingsViewModel>();
+                services.AddTransient<GoodGovernanceApp.ViewModels.SimpleDashboardViewModel>();
+                services.AddTransient<GoodGovernanceApp.ViewModels.SystemsApplicationProfileViewModel>();
+                services.AddTransient<GoodGovernanceApp.ViewModels.TrademarkViewModel>();
+                services.AddTransient<GoodGovernanceApp.ViewModels.UserManagementViewModel>();
             })
             .Build();
 
@@ -110,8 +148,11 @@ public partial class App : Application
     {
         await AppHost!.StartAsync();
 
-        GoodGovernanceApp.Services.ConnectivityService.StartMonitoring();
-        GoodGovernanceApp.Services.SyncService.StartAutoSync();
+        var connectivity = AppHost.Services.GetRequiredService<GoodGovernanceApp.Services.IConnectivityService>();
+        connectivity.StartMonitoring();
+
+        var syncService = AppHost.Services.GetRequiredService<GoodGovernanceApp.Services.ISyncService>();
+        syncService.StartAutoSync();
 
         string appData = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
@@ -357,3 +398,6 @@ public partial class App : Application
         base.OnExit(e);
     }
 }
+
+
+

@@ -74,8 +74,9 @@ public class ParametersViewModel : ViewModelBase
     public ICommand DeleteCategoryCommand { get; }
     public ICommand CancelCategoryCommand { get; }
 
-    public ParametersViewModel()
+    public ParametersViewModel(AppDbContext context)
     {
+        _context = context;
         AddParameterCommand = new RelayCommand(p => { SelectedParameter = new Parameter(); IsEditingParameter = true; });
         CancelParameterCommand = new RelayCommand(p => { CancelChanges(); IsEditingParameter = false; SelectedParameter = new Parameter(); });
         SaveParameterCommand = new RelayCommand(ExecuteSaveParameter, p => IsEditingParameter && !string.IsNullOrWhiteSpace(SelectedParameter.Name));
@@ -91,7 +92,7 @@ public class ParametersViewModel : ViewModelBase
 
         try
         {
-            _context = App.AppHost!.Services.GetRequiredService<AppDbContext>();
+
             _context.Parameters.Load();
             Parameters = _context.Parameters.Local.ToObservableCollection();
 

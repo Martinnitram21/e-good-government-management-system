@@ -48,9 +48,12 @@ public class BudgetYearSelectionViewModel : ViewModelBase
 
     public ICommand AddMasterBudgetCommand { get; }
 
-    public BudgetYearSelectionViewModel()
+    private readonly GoodGovernanceApp.Services.SessionService _sessionService;
+
+    public BudgetYearSelectionViewModel(AppDbContext context, GoodGovernanceApp.Services.SessionService sessionService)
     {
-        _context = App.AppHost!.Services.GetRequiredService<AppDbContext>();
+        _context = context;
+        _sessionService = sessionService;
 
         AddMasterBudgetCommand = new RelayCommand(async _ => await AddMasterBudgetAsync());
 
@@ -82,7 +85,7 @@ public class BudgetYearSelectionViewModel : ViewModelBase
             FiscalYear = yearStr,
             TotalAmount = Math.Round(NewBudgetAmount, 2),
             Description = NewBudgetDescription,
-            CreatedById = App.AppHost!.Services.GetRequiredService<GoodGovernanceApp.Services.SessionService>().CurrentUser?.Id ?? 1,
+            CreatedById = _sessionService.CurrentUser?.Id ?? 1,
             CreatedAt = DateTime.Now,
             UpdatedAt = DateTime.Now,
             AllocatedBudget = 0.00m,

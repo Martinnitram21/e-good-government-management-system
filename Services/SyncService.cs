@@ -10,13 +10,33 @@ using GoodGovernanceApp.Models;
 
 namespace GoodGovernanceApp.Services;
 
-public class SyncService
+public interface ISyncService
 {
-    private static bool _isSyncing = false;
-    public static event Action<bool>?   OnSyncStatusChanged;
-    public static event Action<string>? OnSyncProgress;
+    event Action<bool>? OnSyncStatusChanged;
+    event Action<string>? OnSyncProgress;
+    event Action<List<string>>? OnSyncErrorsCollected;
+    void StartAutoSync();
+    Task SyncNowAsync();
+}
 
-    public static void StartAutoSync()
+public class SyncService : ISyncService
+{
+    private bool _isSyncing = false;
+    public event Action<bool>?   OnSyncStatusChanged;
+    public event Action<string>? OnSyncProgress;
+    public event Action<List<string>>? OnSyncErrorsCollected;
+
+    private readonly IConnectivityService _connectivityService;
+    private readonly IServiceScopeFactory _scopeFactory;
+
+    public SyncService(IConnectivityService connectivityService, IServiceScopeFactory scopeFactory)
+    {
+        _connectivityService = connectivityService;
+        _scopeFactory = scopeFactory;
+    }
+
+
+    public void StartAutoSync()
     {
         _ = Task.Run(async () =>
         {
@@ -24,13 +44,13 @@ public class SyncService
             {
                 await Task.Delay(TimeSpan.FromMinutes(5));
 
-                if (ConnectivityService.IsOnline && !_isSyncing)
+                if (_connectivityService.IsOnline && !_isSyncing)
                     await SyncNowAsync();
             }
         });
     }
 
-    public static async Task SyncNowAsync()
+    public async Task SyncNowAsync()
     {
         if (_isSyncing) return;
 
@@ -38,9 +58,10 @@ public class SyncService
         OnSyncStatusChanged?.Invoke(true);
         OnSyncProgress?.Invoke("Syncing with cloud...");
 
+        var syncErrors = new List<string>();
         try
         {
-            using var scope = App.AppHost!.Services.CreateScope();
+            using var scope = _scopeFactory.CreateScope();
             var localDb = scope.ServiceProvider.GetRequiredService<AppDbContext>();
             var cloudDb = scope.ServiceProvider.GetRequiredService<CloudDbContext>();
 
@@ -104,11 +125,12 @@ public class SyncService
             OnSyncProgress?.Invoke("Syncing consolidated transactions...");
             await SyncTableAsync(localDb, cloudDb, localDb.ConsolidatedTransactions, cloudDb.ConsolidatedTransactions, preservePk: false);
 
-            OnSyncProgress?.Invoke("✔ Synced successfully");
+            OnSyncProgress?.Invoke(syncErrors.Count == 0 ? "✔ Synced successfully" : $"⚠ Synced with {syncErrors.Count} error(s)");
         }
         catch (Exception ex)
         {
             var innerMsg = ex.InnerException != null ? ex.InnerException.Message : "";
+            syncErrors.Add($"Fatal: {ex.Message} | {innerMsg}");
             OnSyncProgress?.Invoke($"⚠ Sync Error: {ex.Message}\nDetails: {innerMsg}");
             System.Diagnostics.Debug.WriteLine($"[SyncService] Error: {ex}");
         }
@@ -116,11 +138,13 @@ public class SyncService
         {
             _isSyncing = false;
             OnSyncStatusChanged?.Invoke(false);
+            OnSyncErrorsCollected?.Invoke(syncErrors);
+            WriteSyncLog(syncErrors);
             _ = Task.Delay(15000).ContinueWith(_ => OnSyncProgress?.Invoke("Idle"));
         }
     }
 
-    private static async Task MigrateCloudTablesAsync(CloudDbContext cloudDb)
+    private async Task MigrateCloudTablesAsync(CloudDbContext cloudDb)
     {
         var migrations = new[]
         {
@@ -196,7 +220,7 @@ public class SyncService
     /// Duplicate SyncIds are collapsed via GroupBy before building lookup dictionaries,
     /// preventing the "An item with the same key has already been added" crash.
     /// </summary>
-    private static async Task SyncTableAsync<T>(
+    private async Task SyncTableAsync<T>(
         AppDbContext  localDb,
         CloudDbContext cloudDb,
         DbSet<T>      localSet,
@@ -340,7 +364,7 @@ public class SyncService
     /// - The PK column itself is never written (only used in the WHERE clause).
     /// - isMySql=true uses backtick quoting; false uses double-quote quoting (SQLite).
     /// </summary>
-    private static async Task RawSqlUpdateAsync<T>(
+    private async Task RawSqlUpdateAsync<T>(
         System.Data.Common.DbConnection conn,
         string tableName,
         IEnumerable<IProperty> scalarProps,
@@ -396,7 +420,7 @@ public class SyncService
         }
     }
 
-    private static async Task RawSqlInsertAsync<T>(
+    private async Task RawSqlInsertAsync<T>(
         System.Data.Common.DbConnection conn,
         string tableName,
         IEnumerable<IProperty> scalarProps,
@@ -441,5 +465,31 @@ public class SyncService
             System.Diagnostics.Debug.WriteLine($"[SyncService] RawSqlInsert failed on {tableName}: {ex.Message}");
             throw;
         }
+    }
+
+    /// <summary>
+    /// Persists sync results to a log file with timestamps.
+    /// </summary>
+    private void WriteSyncLog(List<string> errors)
+    {
+        try
+        {
+            string logDir = System.IO.Path.Combine(AppContext.BaseDirectory, "Logs");
+            if (!System.IO.Directory.Exists(logDir))
+                System.IO.Directory.CreateDirectory(logDir);
+
+            string logPath = System.IO.Path.Combine(logDir, "sync_log.txt");
+            var lines = new List<string>
+            {
+                $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] Sync completed — {errors.Count} error(s)"
+            };
+
+            foreach (var err in errors)
+                lines.Add($"  ERROR: {err}");
+
+            lines.Add(""); // blank line separator
+            System.IO.File.AppendAllLines(logPath, lines);
+        }
+        catch { /* Logging must never crash the sync flow */ }
     }
 }

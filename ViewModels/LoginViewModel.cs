@@ -87,10 +87,15 @@ public class LoginViewModel : ViewModelBase
     public ICommand OpenDbSettingsCommand { get; }
     public ICommand CheatCommand { get; }
 
+    private readonly IServiceProvider _serviceProvider;
+    private readonly DatabaseHelper _dbHelper;
+
     // ── Constructor ───────────────────────────────────────────────────────────
-    public LoginViewModel(GoodGovernanceApp.Services.SessionService sessionService)
+    public LoginViewModel(GoodGovernanceApp.Services.SessionService sessionService, IServiceProvider serviceProvider, DatabaseHelper dbHelper)
     {
         _sessionService = sessionService;
+        _serviceProvider = serviceProvider;
+        _dbHelper = dbHelper;
 
         LoginCommand = new RelayCommand(async p => await ExecuteLoginAsync(p), CanExecuteLogin);
         OpenDbSettingsCommand = new RelayCommand(_ => new DatabaseSettingsWindow().ShowDialog());
@@ -124,7 +129,7 @@ public class LoginViewModel : ViewModelBase
         {
             User? user = null;
 
-            using var scope = App.AppHost!.Services.CreateScope();
+            using var scope = _serviceProvider.CreateScope();
             var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
             string inputLower = Username.Trim().ToLowerInvariant();
@@ -173,7 +178,7 @@ public class LoginViewModel : ViewModelBase
             // ── Login success ────────────────────────────────────────────────
             _sessionService.CurrentUser = user;
 
-            var mainWindow = App.AppHost!.Services.GetService(typeof(MainWindow)) as MainWindow;
+            var mainWindow = _serviceProvider.GetService(typeof(MainWindow)) as MainWindow;
             mainWindow!.Show();
 
             if (parameter is Window window)
@@ -207,20 +212,8 @@ public class LoginViewModel : ViewModelBase
     {
         try
         {
-            var dbHelper = App.AppHost!.Services.GetRequiredService<DatabaseHelper>();
-
-            // ✅ ADD THIS — create table first before querying
-            string createTableQuery = @"
-            CREATE TABLE IF NOT EXISTS goveprofile (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                GoveName NVARCHAR(255),
-                Address NVARCHAR(255),
-                LogoAddress NVARCHAR(500)
-            );";
-            await dbHelper.ExecuteNonQueryAsync(createTableQuery);
-
             string query = "SELECT GoveName, LogoAddress, Address FROM goveprofile LIMIT 1;";
-            var dataTable = await dbHelper.ExecuteQueryAsync(query);
+            var dataTable = await _dbHelper.ExecuteQueryAsync(query);
 
             if (dataTable.Rows.Count > 0)
             {

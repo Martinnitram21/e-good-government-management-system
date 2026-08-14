@@ -175,11 +175,11 @@ public class UserManagementViewModel : ViewModelBase
     public ICommand UploadPhotoCommand { get; }
 
     // ── Constructor ───────────────────────────────────────────────────────────
-    public UserManagementViewModel()
+    public UserManagementViewModel(AppDbContext context)
     {
         try
         {
-            _context = App.AppHost!.Services.GetRequiredService<AppDbContext>();
+            _context = context;
             LoadData();
         }
         catch (Exception ex)

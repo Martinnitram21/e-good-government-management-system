@@ -32,9 +32,9 @@ public class SystemsApplicationProfileViewModel : ViewModelBase
     public ICommand BrowseCommand { get; }
     public ICommand SaveCommand { get; }
 
-    public SystemsApplicationProfileViewModel()
+    public SystemsApplicationProfileViewModel(DatabaseHelper dbHelper)
     {
-        _dbHelper = App.AppHost!.Services.GetRequiredService<DatabaseHelper>();
+        _dbHelper = dbHelper;
         BrowseCommand = new RelayCommand(_ => ExecuteBrowse());
         SaveCommand = new RelayCommand(async _ => await ExecuteSaveAsync());
 
@@ -52,7 +52,7 @@ public class SystemsApplicationProfileViewModel : ViewModelBase
             // Ensure table exists
             string createTableQuery = @"
                 CREATE TABLE IF NOT EXISTS systemsprofile (
-                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
                     PhotoAddress NVARCHAR(500)
                 );";
 
@@ -178,7 +178,7 @@ public class SystemsApplicationProfileViewModel : ViewModelBase
                 string updateQuery = @"
                     UPDATE systemsprofile 
                     SET PhotoAddress = @photoAddress 
-                    ORDER BY id ASC LIMIT 1;";
+                    WHERE id IN (SELECT id FROM systemsprofile ORDER BY id ASC LIMIT 1);";
                 
                 await _dbHelper.ExecuteNonQueryAsync(updateQuery,
                     new SqliteParameter("@photoAddress", PhotoAddress));

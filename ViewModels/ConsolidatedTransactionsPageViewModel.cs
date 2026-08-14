@@ -8,12 +8,14 @@ using System.ComponentModel;
 using System.Threading.Tasks;
 using System.Windows.Data;
 using System.Windows.Input;
+using GoodGovernanceApp.Services;
 
 namespace GoodGovernanceApp.ViewModels;
 
 public class ConsolidatedTransactionsPageViewModel : ViewModelBase
 {
     private readonly AppDbContext _dbContext;
+    private readonly ICrsBeneficiaryService _crsBeneficiaryService;
 
     private ObservableCollection<ConsolidatedTransactionsViewModel> _consolidatedRows = new();
     private ICollectionView _consolidatedTransactionsView = null!;
@@ -91,11 +93,12 @@ public class ConsolidatedTransactionsPageViewModel : ViewModelBase
     public ICommand OpenOfficeAnalyticsCommand     { get; }
     public ICommand OpenProjectAnalyticsCommand    { get; }
 
-    public ConsolidatedTransactionsPageViewModel()
+    public ConsolidatedTransactionsPageViewModel(AppDbContext dbContext, ICrsBeneficiaryService crsBeneficiaryService)
     {
         if (App.AppHost == null) return;
 
-        _dbContext = App.AppHost.Services.GetRequiredService<AppDbContext>();
+        _dbContext = dbContext;
+        _crsBeneficiaryService = crsBeneficiaryService;
 
         _consolidatedRows = new ObservableCollection<ConsolidatedTransactionsViewModel>();
         _consolidatedTransactionsView = CollectionViewSource.GetDefaultView(_consolidatedRows);
@@ -108,7 +111,7 @@ public class ConsolidatedTransactionsPageViewModel : ViewModelBase
         {
             if (row is ConsolidatedTransactionsViewModel t && !string.IsNullOrWhiteSpace(t.BeneficiaryId))
             {
-                var vm = new BeneficiaryAnalyticsViewModel(_dbContext, t.BeneficiaryId, t.FullName);
+                var vm = new BeneficiaryAnalyticsViewModel(_dbContext, _crsBeneficiaryService, t.BeneficiaryId, t.FullName);
                 var window = new BeneficiaryAnalyticsWindow(vm);
                 window.ShowDialog();
             }

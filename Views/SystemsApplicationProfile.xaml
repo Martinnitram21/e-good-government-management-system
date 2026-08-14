@@ -16,9 +16,6 @@
         TextOptions.TextRenderingMode="Auto"
         Background="{DynamicResource MaterialDesignPaper}"
         FontFamily="{DynamicResource MaterialDesignFont}">
-    <Window.DataContext>
-        <viewmodels:SystemsApplicationProfileViewModel />
-    </Window.DataContext>
 
     <Grid Margin="16">
         <Grid.RowDefinitions>

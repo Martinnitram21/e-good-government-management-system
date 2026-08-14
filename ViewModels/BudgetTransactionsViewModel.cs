@@ -110,12 +110,12 @@ public class BudgetTransactionsViewModel : ViewModelBase
     private string _currentDatabaseMode = string.Empty;
 
 
-    public BudgetTransactionsViewModel()
+    public BudgetTransactionsViewModel(DatabaseHelper db, AppDbContext dbContext)
     {
         if (App.AppHost == null) return;
 
-        _db = App.AppHost.Services.GetRequiredService<DatabaseHelper>();
-        _dbContext = App.AppHost.Services.GetRequiredService<AppDbContext>();
+        _db = db;
+        _dbContext = dbContext;
 
         // Initialise an empty view so bindings don't throw before data arrives
         _allRows = new ObservableCollection<TransactionRow>();

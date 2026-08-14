@@ -1,8 +1,8 @@
 using GoodGovernanceApp.Data;
 using GoodGovernanceApp.Models;
 using GoodGovernanceApp.Services;
-using LiveCharts;
-using LiveCharts.Wpf;
+using LiveChartsCore;
+using LiveChartsCore.SkiaSharpView;
 using Microsoft.EntityFrameworkCore;
 using System;
 using System.Collections.ObjectModel;
@@ -14,6 +14,7 @@ namespace GoodGovernanceApp.ViewModels;
 public class BeneficiaryAnalyticsViewModel : ViewModelBase
 {
     private readonly AppDbContext _dbContext;
+    private readonly ICrsBeneficiaryService _crsBeneficiaryService;
     public string BeneficiaryId { get; }
 
     private bool _isLoading;
@@ -152,29 +153,29 @@ public class BeneficiaryAnalyticsViewModel : ViewModelBase
     public ObservableCollection<ConsolidatedTransactionsViewModel> RecentTransactions { get; } = new();
 
     // LiveCharts collections
-    private SeriesCollection _typeBreakdownSeries = new();
-    public SeriesCollection TypeBreakdownSeries
+    private ObservableCollection<ISeries> _typeBreakdownSeries = new();
+    public ObservableCollection<ISeries> TypeBreakdownSeries
     {
         get => _typeBreakdownSeries;
         set { _typeBreakdownSeries = value; OnPropertyChanged(); }
     }
 
-    private SeriesCollection _statusBreakdownSeries = new();
-    public SeriesCollection StatusBreakdownSeries
+    private ObservableCollection<ISeries> _statusBreakdownSeries = new();
+    public ObservableCollection<ISeries> StatusBreakdownSeries
     {
         get => _statusBreakdownSeries;
         set { _statusBreakdownSeries = value; OnPropertyChanged(); }
     }
 
-    private SeriesCollection _officeBreakdownSeries = new();
-    public SeriesCollection OfficeBreakdownSeries
+    private ObservableCollection<ISeries> _officeBreakdownSeries = new();
+    public ObservableCollection<ISeries> OfficeBreakdownSeries
     {
         get => _officeBreakdownSeries;
         set { _officeBreakdownSeries = value; OnPropertyChanged(); }
     }
 
-    private SeriesCollection _monthlyTrendSeries = new();
-    public SeriesCollection MonthlyTrendSeries
+    private ObservableCollection<ISeries> _monthlyTrendSeries = new();
+    public ObservableCollection<ISeries> MonthlyTrendSeries
     {
         get => _monthlyTrendSeries;
         set { _monthlyTrendSeries = value; OnPropertyChanged(); }
@@ -189,9 +190,10 @@ public class BeneficiaryAnalyticsViewModel : ViewModelBase
 
     public Func<double, string> Formatter { get; set; }
 
-    public BeneficiaryAnalyticsViewModel(AppDbContext dbContext, string beneficiaryId, string fullName)
+    public BeneficiaryAnalyticsViewModel(AppDbContext dbContext, ICrsBeneficiaryService crsBeneficiaryService, string beneficiaryId, string fullName)
     {
         _dbContext    = dbContext;
+        _crsBeneficiaryService = crsBeneficiaryService;
         BeneficiaryId = beneficiaryId;
         FullName      = fullName;
         Formatter     = value => value.ToString("C");
@@ -208,9 +210,8 @@ public class BeneficiaryAnalyticsViewModel : ViewModelBase
         IsLoading = true;
         try
         {
-            await Task.WhenAll(
-                LoadCrsProfileAsync(),
-                LoadAnalyticsAsync());
+            await LoadCrsProfileAsync();
+            await LoadAnalyticsAsync();
         }
         finally
         {
@@ -223,7 +224,7 @@ public class BeneficiaryAnalyticsViewModel : ViewModelBase
     {
         try
         {
-            var b = await CrsBeneficiaryService.GetByIdAsync(BeneficiaryId);
+            var b = await _crsBeneficiaryService.GetByIdAsync(BeneficiaryId);
 
             if (b == null)
             {
@@ -331,49 +332,49 @@ public class BeneficiaryAnalyticsViewModel : ViewModelBase
             if (!combinedList.Any()) return;
 
             // ── Step 9: Pie Chart – Amount by Transaction Type (both sources) ─────
-            var typeSeries = new SeriesCollection();
+            var typeSeries = new ObservableCollection<ISeries>();
             foreach (var grp in combinedList
                 .GroupBy(t => t.TransactionType ?? "Unknown")
                 .Select(g => new { Type = g.Key, Amount = g.Sum(x => x.Amount) }))
             {
-                typeSeries.Add(new PieSeries
+                typeSeries.Add(new PieSeries<double>
                 {
-                    Title      = grp.Type,
-                    Values     = new ChartValues<decimal> { grp.Amount },
-                    DataLabels = true
+                    Name       = grp.Type,
+                    Values     = new double[] { (double)grp.Amount },
+                    DataLabelsFormatter = point => point.Model.ToString()
                 });
             }
             TypeBreakdownSeries = typeSeries;
 
             // ── Step 10: Pie Chart – Source Breakdown (Consolidated vs Dept) ──────
-            var sourceSeries = new SeriesCollection();
+            var sourceSeries = new ObservableCollection<ISeries>();
             if (consolidatedList.Any())
-                sourceSeries.Add(new PieSeries
+                sourceSeries.Add(new PieSeries<int>
                 {
-                    Title      = "Consolidated",
-                    Values     = new ChartValues<int> { consolidatedList.Count },
-                    DataLabels = true
+                    Name       = "Consolidated",
+                    Values     = new int[] { consolidatedList.Count },
+                    DataLabelsFormatter = point => point.Model.ToString()
                 });
             if (deptList.Any())
-                sourceSeries.Add(new PieSeries
+                sourceSeries.Add(new PieSeries<int>
                 {
-                    Title      = "Department Budget",
-                    Values     = new ChartValues<int> { deptList.Count },
-                    DataLabels = true
+                    Name       = "Department Budget",
+                    Values     = new int[] { deptList.Count },
+                    DataLabelsFormatter = point => point.Model.ToString()
                 });
             StatusBreakdownSeries = sourceSeries;
 
             // ── Step 10.5: Pie Chart — Office Breakdown ─────────────────────────────
-            var officeSeries = new SeriesCollection();
+            var officeSeries = new ObservableCollection<ISeries>();
             foreach (var grp in combinedList
                 .GroupBy(t => string.IsNullOrWhiteSpace(t.OfficeId) ? "Unknown" : t.OfficeId)
                 .Select(g => new { Office = g.Key, Amount = g.Sum(x => x.Amount) }))
             {
-                officeSeries.Add(new PieSeries
+                officeSeries.Add(new PieSeries<double>
                 {
-                    Title      = grp.Office,
-                    Values     = new ChartValues<decimal> { grp.Amount },
-                    DataLabels = true
+                    Name       = grp.Office,
+                    Values     = new double[] { (double)grp.Amount },
+                    DataLabelsFormatter = point => point.Model.ToString()
                 });
             }
             OfficeBreakdownSeries = officeSeries;
@@ -386,28 +387,28 @@ public class BeneficiaryAnalyticsViewModel : ViewModelBase
                 .OrderBy(m => m.Year).ThenBy(m => m.Month)
                 .ToList();
 
-            var trendDept         = new ChartValues<decimal>();
-            var trendConsolidated = new ChartValues<decimal>();
+            var trendDept         = new ObservableCollection<double>();
+            var trendConsolidated = new ObservableCollection<double>();
             var labels            = new ObservableCollection<string>();
 
             foreach (var m in allMonths)
             {
                 labels.Add($"{new DateTime(m.Year, m.Month, 1):MMM yyyy}");
 
-                trendDept.Add(deptList
+                trendDept.Add((double)deptList
                     .Where(t => t.TransactionDate.HasValue && t.TransactionDate.Value.Year == m.Year && t.TransactionDate.Value.Month == m.Month)
                     .Sum(t => t.Amount));
 
-                trendConsolidated.Add(consolidatedList
+                trendConsolidated.Add((double)consolidatedList
                     .Where(t => t.TransactionDate.HasValue && t.TransactionDate.Value.Year == m.Year && t.TransactionDate.Value.Month == m.Month)
                     .Sum(t => t.Amount));
             }
 
             MonthlyLabels = labels;
-            MonthlyTrendSeries = new SeriesCollection
+            MonthlyTrendSeries = new ObservableCollection<ISeries>
             {
-                new ColumnSeries { Title = "Department Budget", Values = trendDept         },
-                new ColumnSeries { Title = "Consolidated",      Values = trendConsolidated }
+                new ColumnSeries<double> { Name = "Department Budget", Values = trendDept         },
+                new ColumnSeries<double> { Name = "Consolidated",      Values = trendConsolidated }
             };
         }
         catch (Exception ex)
@@ -421,3 +422,5 @@ public class BeneficiaryAnalyticsViewModel : ViewModelBase
         // NOTE: IsLoading is cleared by InitializeAsync, not here.
     }
 }
+
+

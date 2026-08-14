@@ -6,16 +6,32 @@ using MySqlConnector;
 
 namespace GoodGovernanceApp.Services;
 
-public class ConnectivityService
+public interface IConnectivityService
 {
-    private static bool _isOnline = false;
-    private static bool _isCrsOnline = false;
-    public static event Action<bool>? OnConnectionStatusChanged;
+    bool IsOnline { get; }
+    bool IsCrsOnline { get; }
+    event Action<bool>? OnConnectionStatusChanged;
+    void StartMonitoring();
+    void SyncCurrentStatus();
+}
 
-    public static bool IsOnline => _isOnline;
-    public static bool IsCrsOnline => _isCrsOnline;
+public class ConnectivityService : IConnectivityService
+{
+    private bool _isOnline = false;
+    private bool _isCrsOnline = false;
+    private readonly IDatabaseConfig _dbConfig;
 
-    public static void StartMonitoring()
+    public event Action<bool>? OnConnectionStatusChanged;
+
+    public bool IsOnline => _isOnline;
+    public bool IsCrsOnline => _isCrsOnline;
+
+    public ConnectivityService(IDatabaseConfig dbConfig)
+    {
+        _dbConfig = dbConfig;
+    }
+
+    public void StartMonitoring()
     {
         _ = Task.Run(async () =>
         {
@@ -39,17 +55,17 @@ public class ConnectivityService
     }
 
     /// <summary>Immediately push current connectivity state to all subscribers.</summary>
-    public static void SyncCurrentStatus()
+    public void SyncCurrentStatus()
     {
         OnConnectionStatusChanged?.Invoke(_isOnline);
     }
 
     // ── Hostinger GGMS ────────────────────────────────────────────────────────
-    private static async Task<bool> CheckHostingerAsync()
+    private async Task<bool> CheckHostingerAsync()
     {
         try
         {
-            string connStr = DatabaseConfig.ConnectionString;
+            string connStr = _dbConfig.ConnectionString;
 
             // Quick TCP check first (fast fail if host is unreachable)
             if (!await TcpPingAsync("194.59.164.58", 3306))
@@ -67,11 +83,11 @@ public class ConnectivityService
     }
 
     // ── CRS Database ──────────────────────────────────────────────────────────
-    private static async Task<bool> CheckCrsAsync()
+    private async Task<bool> CheckCrsAsync()
     {
         try
         {
-            string connStr = DatabaseConfig.CrsConnectionString;
+            string connStr = _dbConfig.CrsConnectionString;
 
             if (!await TcpPingAsync("194.59.164.58", 3306))
                 return false;
@@ -87,7 +103,7 @@ public class ConnectivityService
     }
 
     // ── TCP Ping helper ───────────────────────────────────────────────────────
-    private static async Task<bool> TcpPingAsync(string host, int port, int timeoutMs = 3000)
+    private async Task<bool> TcpPingAsync(string host, int port, int timeoutMs = 3000)
     {
         try
         {

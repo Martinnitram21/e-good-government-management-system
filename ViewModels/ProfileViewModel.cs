@@ -88,10 +88,10 @@ public class ProfileViewModel : ViewModelBase
     public ICommand SaveChangesCommand { get; }
     public ICommand UploadPhotoCommand { get; }
 
-    public ProfileViewModel()
+    public ProfileViewModel(AppDbContext context, SessionService sessionService)
     {
-        _context = App.AppHost!.Services.GetRequiredService<AppDbContext>();
-        _sessionService = App.AppHost!.Services.GetRequiredService<SessionService>();
+        _context = context;
+        _sessionService = sessionService;
 
         SaveChangesCommand = new RelayCommand(async _ => await ExecuteSaveChanges(), _ => CanSave());
         UploadPhotoCommand = new RelayCommand(_ => ExecuteUploadPhoto());

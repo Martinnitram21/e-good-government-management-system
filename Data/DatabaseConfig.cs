@@ -4,21 +4,31 @@ using System;
 using System.IO;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using GoodGovernanceApp.Utilities;
 
 namespace GoodGovernanceApp.Data;
 
-/// <summary>
-/// Single source of truth for all database connection strings in the application.
-/// Every class that needs a connection string MUST read it from here.
-/// </summary>
-public static class DatabaseConfig
+public interface IDatabaseConfig
 {
-    /// <summary>GGMS connection string based on the active DatabaseMode in appsettings.json.</summary>
-    public static string ConnectionString
+    string ConnectionString { get; }
+    string CrsConnectionString { get; }
+    void SaveToAppsettings(string mode, string ggmsConnStr, string crsServer, string crsPort, string crsDb, string crsUser, string crsPass);
+}
+
+public class DatabaseConfig : IDatabaseConfig
+{
+    private readonly IConfiguration _config;
+    
+    public DatabaseConfig(IConfiguration config)
+    {
+        _config = config;
+    }
+
+    public string ConnectionString
     {
         get
         {
-            string dbMode = App.Config["AppSettings:DatabaseMode"] ?? "Local";
+            string dbMode = _config["AppSettings:DatabaseMode"] ?? "Local";
             string key = dbMode switch
             {
                 "Remote" => "RemoteConnection",
@@ -26,23 +36,22 @@ public static class DatabaseConfig
                 _        => "LocalConnection"
             };
 
-            return App.Config.GetConnectionString(key)
+            return _config.GetConnectionString(key)
                 ?? throw new InvalidOperationException($"Connection string '{key}' not found in appsettings.json.");
         }
     }
 
-    /// <summary>CRS database connection string built from the CrsConnection section.</summary>
-    public static string CrsConnectionString
+    public string CrsConnectionString
     {
         get
         {
             var builder = new MySqlConnectionStringBuilder
             {
-                Server = App.Config["CrsConnection:Server"] ?? "localhost",
-                Port = uint.TryParse(App.Config["CrsConnection:Port"], out var p) ? p : 3306,
-                Database = App.Config["CrsConnection:Database"] ?? "crs_db",
-                UserID = App.Config["CrsConnection:User"] ?? "root",
-                Password = App.Config["CrsConnection:Password"] ?? "",
+                Server = _config["CrsConnection:Server"] ?? "localhost",
+                Port = uint.TryParse(_config["CrsConnection:Port"], out var p) ? p : 3306,
+                Database = _config["CrsConnection:Database"] ?? "crs_db",
+                UserID = _config["CrsConnection:User"] ?? "root",
+                Password = _config["CrsConnection:Password"] ?? "",
                 AllowZeroDateTime = true,
                 ConvertZeroDateTime = true,
                 ConnectionTimeout = 15,
@@ -52,11 +61,7 @@ public static class DatabaseConfig
         }
     }
 
-    /// <summary>
-    /// Persists updated connection settings to appsettings.json.
-    /// IConfiguration with reloadOnChange picks up changes automatically.
-    /// </summary>
-    public static void SaveToAppsettings(
+    public void SaveToAppsettings(
         string mode, string ggmsConnStr,
         string crsServer, string crsPort, string crsDb, string crsUser, string crsPass)
     {
@@ -65,10 +70,8 @@ public static class DatabaseConfig
         string json = File.ReadAllText(path);
         var root = JsonNode.Parse(json)!.AsObject();
 
-        // Update DatabaseMode
         root["AppSettings"]!["DatabaseMode"] = mode;
 
-        // Update the active GGMS connection string
         string key = mode switch
         {
             "Remote" => "RemoteConnection",
@@ -77,7 +80,6 @@ public static class DatabaseConfig
         };
         root["ConnectionStrings"]![key] = ggmsConnStr;
 
-        // Update CRS connection fields
         root["CrsConnection"]!["Server"]   = crsServer;
         root["CrsConnection"]!["Port"]     = crsPort;
         root["CrsConnection"]!["Database"] = crsDb;
@@ -85,6 +87,6 @@ public static class DatabaseConfig
         root["CrsConnection"]!["Password"] = crsPass;
 
         var options = new JsonSerializerOptions { WriteIndented = true };
-        File.WriteAllText(path, root.ToJsonString(options));
+        ConfigFileHelper.AtomicWriteJson(path, root.ToJsonString(options));
     }
 }

@@ -4,6 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using GoodGovernanceApp.Models;
 using GoodGovernanceApp.Utilities;
+using GoodGovernanceApp.Data;
 
 namespace GoodGovernanceApp.Services;
 
@@ -18,19 +19,35 @@ namespace GoodGovernanceApp.Services;
 ///   Monthly   – advances NextRunTime by 1 calendar month after each run,
 ///               keeping the configured ScheduleDay as the day of the month.
 /// </summary>
-public class BackupSchedulerService : IDisposable
+public interface IBackupSchedulerService : IDisposable
 {
+    void Start(BackupSettings settings, string connectionString = "");
+    void Stop();
+}
+
+public class BackupSchedulerService : IBackupSchedulerService
+{
+    private readonly IDatabaseConfig _dbConfig;
     private Timer? _timer;
     private BackupSettings _settings = new();
+    private readonly object _lock = new();
     private readonly BackupService _backupService = new();
 
     // ── Public API ────────────────────────────────────────────────────────────
 
+    public BackupSchedulerService(IDatabaseConfig dbConfig)
+    {
+        _dbConfig = dbConfig;
+    }
+
     /// <summary>Start (or restart) the scheduler with the given settings.</summary>
     public void Start(BackupSettings settings, string connectionString = "")
     {
-        _settings = settings;
-        _backupService.MySqlDumpPath = settings.MySqlDumpPath;
+        lock (_lock)
+        {
+            _settings = settings;
+            _backupService.MySqlDumpPath = settings.MySqlDumpPath;
+        }
 
         // Stop any running timer before restarting.
         _timer?.Dispose();
@@ -52,18 +69,23 @@ public class BackupSchedulerService : IDisposable
 
     private void OnTimerTick(object? state)
     {
-        if (!_settings.IsEnabled) return;
-        if (DateTime.Now < _settings.NextRunTime) return;
+        BackupSettings settings;
+        lock (_lock)
+        {
+            settings = _settings;
+        }
+        if (!settings.IsEnabled) return;
+        if (DateTime.Now < settings.NextRunTime) return;
 
         // Run backup asynchronously; fire-and-forget with proper logging inside.
         _ = Task.Run(async () =>
         {
-            string folder = string.IsNullOrWhiteSpace(_settings.BackupFolder)
+            string folder = string.IsNullOrWhiteSpace(settings.BackupFolder)
                 ? Path.Combine(AppContext.BaseDirectory, "Backups")
-                : _settings.BackupFolder;
+                : settings.BackupFolder;
 
-            string connStr = GoodGovernanceApp.Data.DatabaseConfig.ConnectionString;
-            bool success = _settings.BackupType switch
+            string connStr = _dbConfig.ConnectionString;
+            bool success = settings.BackupType switch
             {
                 "Differential" => await _backupService.CreateDifferentialBackupAsync(connStr, folder),
                 "Incremental"  => await _backupService.CreateIncrementalBackupAsync(connStr, folder),
@@ -71,14 +93,17 @@ public class BackupSchedulerService : IDisposable
             };
 
             string logLine = success
-                ? $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] ✅ Scheduled {_settings.BackupType} backup completed."
-                : $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] ❌ Scheduled {_settings.BackupType} backup FAILED.";
+                ? $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] ✅ Scheduled {settings.BackupType} backup completed."
+                : $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] ❌ Scheduled {settings.BackupType} backup FAILED.";
 
             AppendToLog(folder, logLine);
 
             // Advance NextRunTime and persist.
-            AdvanceSchedule();
-            BackupConfigHelper.Save(_settings);
+            lock (_lock)
+            {
+                AdvanceSchedule();
+                BackupConfigHelper.Save(_settings);
+            }
         });
     }
 

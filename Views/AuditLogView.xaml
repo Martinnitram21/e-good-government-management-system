@@ -11,10 +11,6 @@
              TextElement.FontFamily="{DynamicResource MaterialDesignFont}"
              Background="{DynamicResource MaterialDesignPaper}">
 
-    <UserControl.DataContext>
-        <viewmodels:AuditLogViewModel/>
-    </UserControl.DataContext>
-
     <UserControl.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVis"/>
     </UserControl.Resources>

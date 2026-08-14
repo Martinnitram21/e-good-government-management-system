@@ -8,9 +8,7 @@
              mc:Ignorable="d"
              d:DesignHeight="700" d:DesignWidth="1100">
 
-    <UserControl.DataContext>
-        <viewmodels:BudgetTransactionsViewModel />
-    </UserControl.DataContext>
+
 
     <UserControl.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVis"/>

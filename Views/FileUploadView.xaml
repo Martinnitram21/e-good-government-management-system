@@ -8,9 +8,7 @@
              mc:Ignorable="d" 
              d:DesignHeight="600" d:DesignWidth="1000">
 
-    <UserControl.DataContext>
-        <viewmodels:FileUploadViewModel />
-    </UserControl.DataContext>
+
 
     <Grid Margin="24">
         <Grid.RowDefinitions>

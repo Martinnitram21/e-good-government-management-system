@@ -8,6 +8,7 @@ using System.Windows.Input;
 using GoodGovernanceApp.Models;
 using GoodGovernanceApp.Utilities;
 using GoodGovernanceApp.ViewModels;
+using GoodGovernanceApp.Data;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Data.Sqlite;
 
@@ -73,9 +74,18 @@ public class CrsBeneficiaryViewModel : ViewModelBase
     public ICommand SearchByIdCommand { get; }
     public ICommand OpenAnalyticsCommand { get; }
 
+    private readonly AppDbContext _dbContext;
+    private readonly GoodGovernanceApp.Services.IConnectivityService _connectivityService;
+    private readonly GoodGovernanceApp.Data.IDatabaseConfig _databaseConfig;
+    private readonly GoodGovernanceApp.Services.ICrsBeneficiaryService _crsBeneficiaryService;
+
     // ── Constructor ────────────────────────────────────────────────────────────
-    public CrsBeneficiaryViewModel()
+    public CrsBeneficiaryViewModel(AppDbContext dbContext, GoodGovernanceApp.Services.IConnectivityService connectivityService, GoodGovernanceApp.Data.IDatabaseConfig databaseConfig, GoodGovernanceApp.Services.ICrsBeneficiaryService crsBeneficiaryService)
     {
+        _dbContext = dbContext;
+        _connectivityService = connectivityService;
+        _databaseConfig = databaseConfig;
+        _crsBeneficiaryService = crsBeneficiaryService;
         BeneficiariesView = CollectionViewSource.GetDefaultView(Beneficiaries);
         BeneficiariesView.Filter = FilterBeneficiary;
 
@@ -118,8 +128,7 @@ public class CrsBeneficiaryViewModel : ViewModelBase
         if (parameter is Beneficiary b && !string.IsNullOrWhiteSpace(b.BeneficiaryId))
         {
             var fullName = b.DisplayName;
-            var dbContext = App.AppHost!.Services.GetRequiredService<GoodGovernanceApp.Data.AppDbContext>();
-            var vm = new GoodGovernanceApp.ViewModels.BeneficiaryAnalyticsViewModel(dbContext, b.BeneficiaryId, fullName);
+            var vm = new GoodGovernanceApp.ViewModels.BeneficiaryAnalyticsViewModel(_dbContext, _crsBeneficiaryService, b.BeneficiaryId, fullName);
             var window = new GoodGovernanceApp.Views.BeneficiaryAnalyticsWindow(vm);
             window.Show();
         }
@@ -132,7 +141,7 @@ public class CrsBeneficiaryViewModel : ViewModelBase
 
         try
         {
-            if (GoodGovernanceApp.Services.ConnectivityService.IsCrsOnline)
+            if (_connectivityService.IsCrsOnline)
             {
                 await LoadFromCloudAsync();
                 StatusMessage = $"✅ Loaded {Beneficiaries.Count:N0} beneficiaries from Cloud.";
@@ -155,7 +164,7 @@ public class CrsBeneficiaryViewModel : ViewModelBase
 
     private async Task LoadFromCloudAsync(string? filterId = null)
     {
-        using var conn = new MySqlConnector.MySqlConnection(GoodGovernanceApp.Data.DatabaseConfig.CrsConnectionString);
+        using var conn = new MySqlConnector.MySqlConnection(_databaseConfig.CrsConnectionString);
         await conn.OpenAsync();
 
         string sql = @"
@@ -179,7 +188,7 @@ public class CrsBeneficiaryViewModel : ViewModelBase
 
         using var reader = await cmd.ExecuteReaderAsync();
 
-        var dbContext = App.AppHost!.Services.GetRequiredService<GoodGovernanceApp.Data.AppDbContext>();
+
 
         while (await reader.ReadAsync())
         {
@@ -211,11 +220,11 @@ public class CrsBeneficiaryViewModel : ViewModelBase
             Beneficiaries.Add(b);
 
             // Update Cache
-            var cache = dbContext.CrsBeneficiaryCaches.FirstOrDefault(c => c.BeneficiaryId == b.BeneficiaryId);
+            var cache = _dbContext.CrsBeneficiaryCaches.FirstOrDefault(c => c.BeneficiaryId == b.BeneficiaryId);
             if (cache == null)
             {
                 cache = new CrsBeneficiaryCache { BeneficiaryId = b.BeneficiaryId };
-                dbContext.CrsBeneficiaryCaches.Add(cache);
+                _dbContext.CrsBeneficiaryCaches.Add(cache);
             }
             cache.FullName = b.FullName;
             cache.FirstName = b.FirstName;
@@ -229,13 +238,12 @@ public class CrsBeneficiaryViewModel : ViewModelBase
             cache.IsSenior = b.IsSenior;
             cache.CachedAt = DateTime.Now;
         }
-        await dbContext.SaveChangesAsync();
+        await _dbContext.SaveChangesAsync();
     }
 
     private async Task LoadFromCacheAsync(string? filterId = null)
     {
-        var dbContext = App.AppHost!.Services.GetRequiredService<GoodGovernanceApp.Data.AppDbContext>();
-        var query = dbContext.CrsBeneficiaryCaches.AsQueryable();
+        var query = _dbContext.CrsBeneficiaryCaches.AsQueryable();
 
         if (!string.IsNullOrEmpty(filterId))
             query = query.Where(c => c.BeneficiaryId.Contains(filterId));
@@ -274,7 +282,7 @@ public class CrsBeneficiaryViewModel : ViewModelBase
 
         try
         {
-            if (GoodGovernanceApp.Services.ConnectivityService.IsCrsOnline)
+            if (!_connectivityService.IsCrsOnline)
             {
                 await LoadFromCloudAsync(id);
                 StatusMessage = Beneficiaries.Count > 0

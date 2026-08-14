@@ -15,9 +15,7 @@
         <converters:RemainingFundColorConverter x:Key="RemainingFundColorConverter" />
     </UserControl.Resources>
 
-    <UserControl.DataContext>
-        <viewmodels:BudgetAllocationViewModel />
-    </UserControl.DataContext>
+
 
     <Grid Margin="24">
         <Grid.RowDefinitions>

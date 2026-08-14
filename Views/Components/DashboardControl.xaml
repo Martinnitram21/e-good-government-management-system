@@ -1,0 +1,213 @@
+<UserControl x:Class="GoodGovernanceApp.Views.Components.DashboardControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes">
+        <Grid Margin="16">
+            
+            <!-- Dashboard View -->
+            <Grid Visibility="{Binding IsShowingDashboard, Converter={StaticResource BoolToVis}}">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="1.4*"/>
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+
+                <!-- Row 0: 4 Colored Tiles -->
+                <Button Grid.Row="0" Grid.Column="0" Style="{StaticResource TileButtonStyle}" Background="#D90000"
+                        Command="{Binding NavigateTileCommand}" CommandParameter="BudgetAllocation">
+                    <StackPanel>
+                        <materialDesign:PackIcon Kind="ScaleBalance" Width="36" Height="36" Margin="0,0,0,12"/>
+                        <TextBlock Text="BUDGET" FontSize="18" FontWeight="Bold"/>
+                        <TextBlock Text="Manage allocations" FontSize="13" Opacity="0.8"/>
+                    </StackPanel>
+                </Button>
+                
+
+                
+                <Button Grid.Row="0" Grid.Column="2" Style="{StaticResource TileButtonStyle}" Background="#8DB355"
+                        Command="{Binding NavigateTileCommand}" CommandParameter="CrsBeneficiary">
+                    <StackPanel>
+                        <materialDesign:PackIcon Kind="AccountGroup" Width="36" Height="36" Margin="0,0,0,12"/>
+                        <TextBlock Text="CITIZENS" FontSize="18" FontWeight="Bold"/>
+                        <TextBlock Text="Registry &amp; feedback" FontSize="13" Opacity="0.8"/>
+                    </StackPanel>
+                </Button>
+                
+                <Button Grid.Row="0" Grid.Column="3" Style="{StaticResource TileButtonStyle}" Background="#8DB355"
+                        Command="{Binding NavigateTileCommand}" CommandParameter="Reports">
+                    <StackPanel>
+                        <materialDesign:PackIcon Kind="FileChart" Width="36" Height="36" Margin="0,0,0,12"/>
+                        <TextBlock Text="REPORTS" FontSize="18" FontWeight="Bold"/>
+                        <TextBlock Text="Analytics &amp; data" FontSize="13" Opacity="0.8"/>
+                    </StackPanel>
+                </Button>
+
+                <!-- Column 4, Row 0: Branding Panel -->
+                <Border Grid.Row="0" Grid.Column="4" Background="#FFFFFF" CornerRadius="12" Margin="8">
+                    <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+                        <!-- Binding the logo to SystemPhotoSource or fallback to icon -->
+                        <Border Background="#F3F5F7" CornerRadius="12" MaxHeight="160" MaxWidth="320" Margin="0,0,0,16" ClipToBounds="True">
+                            <Grid>
+                                <materialDesign:PackIcon Kind="ShieldCheck" Foreground="#000000" Width="64" Height="64" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="{Binding SystemPhotoSource, Converter={StaticResource InvBoolToVis}}"/>
+                                <Image Source="{Binding SystemPhotoSource}" Stretch="Uniform" Margin="4" Visibility="{Binding SystemPhotoSource, Converter={StaticResource NullToVis}}"/>
+                            </Grid>
+                        </Border>
+                        <TextBlock Text="GGS PLATFORM" FontSize="20" FontWeight="Bold" Foreground="#000000" HorizontalAlignment="Center"/>
+                        <TextBlock Text="Version 2.0" FontSize="14" Foreground="#000000" HorizontalAlignment="Center"/>
+                    </StackPanel>
+                </Border>
+
+                <!-- Column 4, Row 1: Proof of Copyright (only visible when image exists) -->
+                <Border Grid.Row="1" Grid.Column="4" Background="#FFFFFF" CornerRadius="12" Margin="8"
+                        Visibility="{Binding CopyrightPhotoSource, Converter={StaticResource NullToVis}}">
+                    <Border Background="#F3F5F7" CornerRadius="12" MaxHeight="200" MaxWidth="320" ClipToBounds="True">
+                        <Image Source="{Binding CopyrightPhotoSource}" Stretch="Uniform" Margin="8"/>
+                    </Border>
+                </Border>
+
+                <!-- Row 1, Columns 0-1: Dark Date/Time & Label -->
+                <Border Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2" Background="#000000" CornerRadius="12" Margin="8" Padding="24">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
+                        
+                        <Border Grid.Row="0" Background="#000000" CornerRadius="4" Padding="8,4" HorizontalAlignment="Left" Margin="0,0,0,16">
+                            <TextBlock Text="SYSTEM READY" Foreground="#8DB355" FontSize="12" FontWeight="Bold"/>
+                        </Border>
+                        
+                        <StackPanel Grid.Row="1" VerticalAlignment="Center">
+                            <TextBlock Text="{Binding CurrentDate}" FontSize="28" FontWeight="Light" Foreground="White" TextWrapping="Wrap"/>
+                        </StackPanel>
+                    </Grid>
+                </Border>
+
+                <!-- Row 1, Column 2: Users Tile -->
+                <Button Grid.Row="1" Grid.Column="2" Style="{StaticResource TileButtonStyle}" Background="#D90000"
+                        Command="{Binding NavigateTileCommand}" CommandParameter="Users">
+                    <StackPanel>
+                        <materialDesign:PackIcon Kind="AccountGroup" Width="36" Height="36" Margin="0,0,0,12"/>
+                        <TextBlock Text="USERS" FontSize="18" FontWeight="Bold"/>
+                        <TextBlock Text="Manage accounts" FontSize="13" Opacity="0.8"/>
+                    </StackPanel>
+                </Button>
+
+                <!-- Row 1, Column 3: Consolidated Tile -->
+                <Button Grid.Row="1" Grid.Column="3" Style="{StaticResource TileButtonStyle}" Background="#D90000"
+                        Command="{Binding NavigateTileCommand}" CommandParameter="ConsolidatedTransactions">
+                    <StackPanel>
+                        <materialDesign:PackIcon Kind="TableMultiple" Width="36" Height="36" Margin="0,0,0,12"/>
+                        <TextBlock Text="CONSOLIDATED" FontSize="16" FontWeight="Bold"/>
+                        <TextBlock Text="All transactions" FontSize="13" Opacity="0.8"/>
+                    </StackPanel>
+                </Button>
+
+                <!-- Row 2: 4 Colored Tiles -->
+                <Button Grid.Row="2" Grid.Column="0" Style="{StaticResource TileButtonStyle}" Background="#8DB355"
+                        Command="{Binding NavigateTileCommand}" CommandParameter="Evaluation">
+                    <StackPanel>
+                        <materialDesign:PackIcon Kind="FileDocumentEdit" Width="36" Height="36" Margin="0,0,0,12"/>
+                        <TextBlock Text="EVALUATION" FontSize="18" FontWeight="Bold"/>
+                        <TextBlock Text="Performance metrics" FontSize="13" Opacity="0.8"/>
+                    </StackPanel>
+                </Button>
+                
+                <Button Grid.Row="0" Grid.Column="1" Style="{StaticResource TileButtonStyle}" Background="#8DB355"
+                        Command="{Binding NavigateTileCommand}" CommandParameter="Transactions">
+                    <StackPanel>
+                        <materialDesign:PackIcon Kind="Finance" Width="36" Height="36" Margin="0,0,0,12"/>
+                        <TextBlock Text="BUDGET TRANSACTIONS" FontSize="16" FontWeight="Bold" TextWrapping="Wrap"/>
+                        <TextBlock Text="Financial records" FontSize="13" Opacity="0.8"/>
+                    </StackPanel>
+                </Button>
+                
+                <Button Grid.Row="2" Grid.Column="1" Style="{StaticResource TileButtonStyle}" Background="#8DB355"
+                        Command="{Binding NavigateTileCommand}" CommandParameter="Parameters">
+                    <StackPanel>
+                        <materialDesign:PackIcon Kind="CogBox" Width="36" Height="36" Margin="0,0,0,12"/>
+                        <TextBlock Text="PARAMETERS" FontSize="18" FontWeight="Bold"/>
+                        <TextBlock Text="System variables" FontSize="13" Opacity="0.8"/>
+                    </StackPanel>
+                </Button>
+
+                <!-- Row 2, Column 4: Split Settings & Exit Tiles -->
+                <Grid Grid.Row="2" Grid.Column="4">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    
+                    <Button Grid.Column="0" Style="{StaticResource TileButtonStyle}" Background="#8DB355" Margin="8,8,4,8"
+                            Command="{Binding NavigateTileCommand}" CommandParameter="Settings">
+                        <StackPanel>
+                            <materialDesign:PackIcon Kind="Cog" Width="36" Height="36" Margin="0,0,0,12"/>
+                            <TextBlock Text="SETTINGS" FontSize="16" FontWeight="Bold"/>
+                            <TextBlock Text="System config" FontSize="12" Opacity="0.8"/>
+                        </StackPanel>
+                    </Button>
+                    
+                    <Button Grid.Column="1" Style="{StaticResource TileButtonStyle}" Background="#D90000" Margin="4,8,8,8"
+                            Command="{Binding LogoutCommand}" CommandParameter="{Binding ElementName=MainWin}">
+                        <StackPanel>
+                            <materialDesign:PackIcon Kind="Power" Width="36" Height="36" Margin="0,0,0,12"/>
+                            <TextBlock Text="EXIT" FontSize="16" FontWeight="Bold"/>
+                            <TextBlock Text="Close app" FontSize="12" Opacity="0.8"/>
+                        </StackPanel>
+                    </Button>
+                </Grid>
+            </Grid>
+
+            <!-- Active Module View -->
+            <Grid Visibility="{Binding IsShowingView, Converter={StaticResource BoolToVis}}">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+                
+                <!-- Breadcrumb for active view -->
+                <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center" Margin="16,0,0,16">
+                    <Button Background="Transparent" BorderThickness="0"
+                            Command="{Binding ShowDashboardCommand}"
+                            Margin="0 0 12 0" Foreground="#000000" Height="32" Padding="0">
+                        <StackPanel Orientation="Horizontal">
+                            <materialDesign:PackIcon Kind="ArrowLeft" Width="16" Height="16" VerticalAlignment="Center" Margin="0 0 5 0"/>
+                            <TextBlock Text="Main" FontSize="14" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+                    <TextBlock Text="›" Foreground="#000000" FontSize="18" VerticalAlignment="Center" Margin="0 0 12 0"/>
+                    <TextBlock Text="{Binding CurrentSectionTitle}" FontSize="18" FontWeight="SemiBold" Foreground="#000000" VerticalAlignment="Center"/>
+                </StackPanel>
+
+                <!-- Frame / ContentControl -->
+                <Border Grid.Row="1" Background="#FFFFFF" CornerRadius="12" Padding="8">
+                    <ContentControl Content="{Binding CurrentView}" Margin="0,2,0,0">
+                        <ContentControl.Template>
+                            <ControlTemplate TargetType="ContentControl">
+                                <Border x:Name="Bd" Opacity="0">
+                                    <ContentPresenter/>
+                                    <Border.Triggers>
+                                        <EventTrigger RoutedEvent="Loaded">
+                                            <BeginStoryboard>
+                                                <Storyboard>
+                                                    <DoubleAnimation Storyboard.TargetName="Bd" Storyboard.TargetProperty="Opacity" From="0" To="1" Duration="0:0:0.22"/>
+                                                    <ThicknessAnimation Storyboard.TargetName="Bd" Storyboard.TargetProperty="Margin" From="0,22,0,0" To="0,0,0,0" Duration="0:0:0.28"/>
+                                                </Storyboard>
+                                            </BeginStoryboard>
+                                        </EventTrigger>
+                                    </Border.Triggers>
+                                </Border>
+                            </ControlTemplate>
+                        </ContentControl.Template>
+                    </ContentControl>
+                </Border>
+            </Grid>
+        </Grid>
+</UserControl>

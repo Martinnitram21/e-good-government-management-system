@@ -90,9 +90,9 @@ public class DepartmentManagementViewModel : ViewModelBase
     public ICommand AddProjectCommand { get; }
     public ICommand AllocateBudgetCommand { get; }
 
-    public DepartmentManagementViewModel()
+    public DepartmentManagementViewModel(AppDbContext context)
     {
-        _context = App.AppHost!.Services.GetRequiredService<AppDbContext>();
+        _context = context;
         AddDepartmentCommand = new RelayCommand(async _ => await AddOfficeAsync());
         AddRoleCommand = new RelayCommand(async _ => await AddRoleAsync(), _ => SelectedDepartment != null);
         DeleteDepartmentCommand = new RelayCommand(async _ => await DeleteOfficeAsync(), _ => SelectedDepartment != null);

@@ -38,9 +38,9 @@ public class ProjectDetailsViewModel : ViewModelBase
         }
     }
 
-    public ProjectDetailsViewModel()
+    public ProjectDetailsViewModel(AppDbContext context)
     {
-        _context = App.AppHost!.Services.GetRequiredService<AppDbContext>();
+        _context = context;
         _ = LoadAndFilterAsync(null); // ✅ changed from LoadDataAsync
     }
 

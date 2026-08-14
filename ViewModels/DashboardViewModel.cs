@@ -6,8 +6,9 @@ using GoodGovernanceApp.Data;
 using GoodGovernanceApp.Models;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
-using LiveCharts;
-using LiveCharts.Wpf;
+using LiveChartsCore;
+using LiveChartsCore.SkiaSharpView;
+using System.Collections.ObjectModel;
 
 namespace GoodGovernanceApp.ViewModels;
 
@@ -27,16 +28,16 @@ public class DashboardViewModel : ViewModelBase
     private List<DeptAllocationData> _deptAllocations = new List<DeptAllocationData>();
 
 
-    private SeriesCollection _deptPieSeries = new SeriesCollection();
-    private SeriesCollection _deptProject  = new SeriesCollection();
+    private ObservableCollection<ISeries> _deptPieSeries = new ObservableCollection<ISeries>();
+    private ObservableCollection<ISeries> _deptProject  = new ObservableCollection<ISeries>();
 
-    public SeriesCollection DeptProjectPieSeries
+    public ObservableCollection<ISeries> DeptProjectPieSeries
     {
         get => _deptProject;
         set { _deptProject = value; OnPropertyChanged(); }
     }
 
-    public SeriesCollection DeptPieSeries
+    public ObservableCollection<ISeries> DeptPieSeries
     {
         get => _deptPieSeries;
         set { _deptPieSeries = value; OnPropertyChanged(); }
@@ -86,15 +87,12 @@ public class DashboardViewModel : ViewModelBase
         set { _deptAllocations = value; OnPropertyChanged(); }
     }
 
-    public DashboardViewModel()
+    public DashboardViewModel(AppDbContext context)
     {
+        _context = context;
         try
         {
-            if (App.AppHost != null)
-            {
-                _context = App.AppHost.Services.GetRequiredService<AppDbContext>();
-                _ = LoadAnalyticsAsync();
-            }
+            _ = LoadAnalyticsAsync();
         }
         catch { }
     }
@@ -136,15 +134,15 @@ public class DashboardViewModel : ViewModelBase
                 })
                 .ToListAsync();
 
-            var seriesproject = new SeriesCollection();
+            var seriesproject = new ObservableCollection<ISeries>();
 
             foreach (var d in projectData)  // <-- use projectData now
             {
-                seriesproject.Add(new LiveCharts.Wpf.PieSeries
+                seriesproject.Add(new PieSeries<double>
                 {
-                    Title = d.Name,
-                    Values = new ChartValues<double> { d.Amount },
-                    DataLabels = true
+                    Name = d.Name,
+                    Values = new double[] { d.Amount },
+                    DataLabelsFormatter = point => point.Model.ToString()
                 });
             }
             DeptProjectPieSeries = seriesproject;
@@ -156,10 +154,10 @@ public class DashboardViewModel : ViewModelBase
             .Select(g => new DeptAllocationData { Name = g.Key, Amount = (double)g.Sum(a => a.AllocatedAmount) })
             .ToListAsync();
 
-            var series = new SeriesCollection(); foreach (var d in officeData) { series.Add(new LiveCharts.Wpf.PieSeries
+            var series = new ObservableCollection<ISeries>(); foreach (var d in officeData) { series.Add(new PieSeries<double>
             {
-                Title = d.Name,
-                Values = new ChartValues<double> { d.Amount }, DataLabels = true
+                Name = d.Name,
+                Values = new double[] { d.Amount }, DataLabelsFormatter = point => point.Model.ToString()
             }); } DeptPieSeries = series;
 
 
@@ -187,3 +185,5 @@ public class DashboardViewModel : ViewModelBase
         ExpenseHeight = expenseVal / max * 250;
     }
 }
+
+

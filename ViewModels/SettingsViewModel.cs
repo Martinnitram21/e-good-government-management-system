@@ -9,6 +9,7 @@ using Microsoft.Data.Sqlite;
 using MySqlConnector;
 using System;
 using System.IO;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Input;
@@ -17,23 +18,30 @@ namespace GoodGovernanceApp.ViewModels
 {
     public class SettingsViewModel : ViewModelBase
     {
+#pragma warning disable CS8618
+        public SettingsViewModel() { }
+#pragma warning restore CS8618
         // ── Fields ───────────────────────────────────────────────────────────
         private readonly SessionService _sessionService;
         private readonly BackupService _backupService;
-        private readonly BackupSchedulerService _scheduler;
+        private readonly GoodGovernanceApp.Services.IBackupSchedulerService _scheduler;
         private readonly Microsoft.Extensions.Configuration.IConfiguration _config;
+        private readonly GoodGovernanceApp.Data.IDatabaseConfig _databaseConfig;
 
-        public SettingsViewModel()
-      : this(App.AppHost!.Services.GetRequiredService<SessionService>(), App.AppHost!.Services.GetRequiredService<Microsoft.Extensions.Configuration.IConfiguration>())
-        {
-        }
+
         // ── Constructor ──────────────────────────────────────────────────────
-        public SettingsViewModel(SessionService sessionService, Microsoft.Extensions.Configuration.IConfiguration config)
+        public SettingsViewModel(
+            SessionService sessionService, 
+            Microsoft.Extensions.Configuration.IConfiguration config, 
+            GoodGovernanceApp.Data.IDatabaseConfig dbConfig,
+            BackupService backupService,
+            GoodGovernanceApp.Services.IBackupSchedulerService scheduler)
         {
             _sessionService = sessionService;
             _config = config;
-            _backupService = new BackupService();
-            _scheduler = new BackupSchedulerService();
+            _databaseConfig = dbConfig;
+            _backupService = backupService;
+            _scheduler = scheduler;
 
             LoadSettings();
             LoadBackupSettings();
@@ -42,7 +50,7 @@ namespace GoodGovernanceApp.ViewModels
             PresetLocalCommand = new RelayCommand(_ => ApplyPreset("Local", true));
             PresetNetworkCommand = new RelayCommand(_ => ApplyPreset("LAN", true));
             PresetRemoteCommand = new RelayCommand(_ => ApplyPreset("Remote", true));
-            TestBothCommand = new RelayCommand(async _ => await ExecuteTestBoth());
+            TestBothCommand = new RelayCommand(async _ => await ExecuteTestBoth(), _ => !IsTesting);
             SaveSettingsCommand = new RelayCommand(async _ => await ExecuteSaveSettings(null));
 
             // ── Backup commands — all gated behind OTP ───────────────────────
@@ -55,7 +63,7 @@ namespace GoodGovernanceApp.ViewModels
             BrowseBackupFolderCommand = new RelayCommand(_ => BrowseBackupFolder());
             BrowseMySqlDumpCommand = new RelayCommand(_ => BrowseMySqlDump());
             OpenSystemsProfileCommand = new RelayCommand(_ => new SystemsApplicationProfile().ShowDialog());
-            OpenCopyrightProfileCommand = new RelayCommand(_ => new CopyrightProfileWindow().ShowDialog());
+            OpenCopyrightProfileCommand = new RelayCommand(_ => new CopyrightProfileWindow { DataContext = App.AppHost?.Services.GetRequiredService<CopyrightProfileViewModel>() }.ShowDialog());
             OpenDepartmentsCommand = new RelayCommand(_ =>
             {
                 var window = new Window
@@ -407,10 +415,19 @@ namespace GoodGovernanceApp.ViewModels
         {
             try
             {
-                using var conn = new MySqlConnection(connStr);
-                await conn.OpenAsync();
-                return (true, "OK");
+                // Use a 10-second timeout to avoid long freezes on unreachable hosts
+                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+
+                // Push the connection work to a thread pool thread so DNS
+                // resolution and TCP handshake don't block the UI thread
+                return await Task.Run(async () =>
+                {
+                    using var conn = new MySqlConnection(connStr);
+                    await conn.OpenAsync(cts.Token);
+                    return (true, "OK");
+                }, cts.Token);
             }
+            catch (OperationCanceledException) { return (false, "Connection timed out (10s)"); }
             catch (MySqlException ex) { return (false, $"MySQL Error [{ex.Number}]: {ex.Message}"); }
             catch (Exception ex) { return (false, $"General Error: {ex.Message}"); }
         }
@@ -468,7 +485,7 @@ namespace GoodGovernanceApp.ViewModels
                 }
 
                 // Write updated settings to appsettings.json (single source of truth)
-                Data.DatabaseConfig.SaveToAppsettings(
+                _databaseConfig.SaveToAppsettings(
                     DatabaseMode, ActiveGgmsConnStr,
                     CrsServer, CrsPort, CrsDatabase, CrsUser, CrsPassword);
 

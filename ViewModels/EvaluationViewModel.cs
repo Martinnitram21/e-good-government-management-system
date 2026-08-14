@@ -15,6 +15,9 @@ namespace GoodGovernanceApp.ViewModels;
 
 public class EvaluationViewModel : ViewModelBase
 {
+#pragma warning disable CS8618
+    public EvaluationViewModel() { }
+#pragma warning restore CS8618
     private readonly AppDbContext _context;
     private readonly Services.SessionService _sessionService;
     private UploadedFile? _selectedFile;
@@ -54,11 +57,10 @@ public class EvaluationViewModel : ViewModelBase
     public ICommand OpenFileCommand { get; }
     public ICommand SubmitEvaluationCommand { get; }
 
-    public EvaluationViewModel()
+    public EvaluationViewModel(AppDbContext context, Services.SessionService sessionService)
     {
-        var services = App.AppHost!.Services;
-        _context = services.GetRequiredService<AppDbContext>();
-        _sessionService = services.GetRequiredService<Services.SessionService>();
+        _context = context;
+        _sessionService = sessionService;
 
         OpenFileCommand = new RelayCommand(_ => ExecuteOpenFile(), _ => SelectedFile != null);
         SubmitEvaluationCommand = new RelayCommand(async _ => await SubmitEvaluationAsync(), _ => CanSubmit());

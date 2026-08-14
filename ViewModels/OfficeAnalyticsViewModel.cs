@@ -4,8 +4,8 @@ using System.Linq;
 using System.Threading.Tasks;
 using GoodGovernanceApp.Data;
 using GoodGovernanceApp.Models;
-using LiveCharts;
-using LiveCharts.Wpf;
+using LiveChartsCore;
+using LiveChartsCore.SkiaSharpView;
 using Microsoft.EntityFrameworkCore;
 
 namespace GoodGovernanceApp.ViewModels
@@ -61,22 +61,22 @@ namespace GoodGovernanceApp.ViewModels
 
         public ObservableCollection<ConsolidatedTransactionsViewModel> OfficeTransactions { get; } = new();
 
-        private SeriesCollection _typeBreakdownSeries = new();
-        public SeriesCollection TypeBreakdownSeries
+        private ObservableCollection<ISeries> _typeBreakdownSeries = new();
+        public ObservableCollection<ISeries> TypeBreakdownSeries
         {
             get => _typeBreakdownSeries;
             set { _typeBreakdownSeries = value; OnPropertyChanged(); }
         }
 
-        private SeriesCollection _statusBreakdownSeries = new();
-        public SeriesCollection StatusBreakdownSeries
+        private ObservableCollection<ISeries> _statusBreakdownSeries = new();
+        public ObservableCollection<ISeries> StatusBreakdownSeries
         {
             get => _statusBreakdownSeries;
             set { _statusBreakdownSeries = value; OnPropertyChanged(); }
         }
 
-        private SeriesCollection _monthlyTrendSeries = new();
-        public SeriesCollection MonthlyTrendSeries
+        private ObservableCollection<ISeries> _monthlyTrendSeries = new();
+        public ObservableCollection<ISeries> MonthlyTrendSeries
         {
             get => _monthlyTrendSeries;
             set { _monthlyTrendSeries = value; OnPropertyChanged(); }
@@ -178,35 +178,35 @@ namespace GoodGovernanceApp.ViewModels
                 if (!combinedList.Any()) return;
 
                 // 9. Pie Chart - Amount by Transaction Type
-                var typeSeries = new SeriesCollection();
+                var typeSeries = new ObservableCollection<ISeries>();
                 foreach (var grp in combinedList
                     .GroupBy(t => t.TransactionType ?? "Unknown")
                     .Select(g => new { Type = g.Key, Amount = g.Sum(x => x.Amount) }))
                 {
-                    typeSeries.Add(new PieSeries
+                    typeSeries.Add(new PieSeries<double>
                     {
-                        Title      = grp.Type,
-                        Values     = new ChartValues<decimal> { grp.Amount },
-                        DataLabels = true
+                        Name       = grp.Type,
+                        Values     = new double[] { (double)grp.Amount },
+                        DataLabelsFormatter = point => point.Model.ToString()
                     });
                 }
                 TypeBreakdownSeries = typeSeries;
 
                 // 10. Pie Chart - Source Breakdown
-                var sourceSeries = new SeriesCollection();
+                var sourceSeries = new ObservableCollection<ISeries>();
                 if (consolidatedList.Any())
-                    sourceSeries.Add(new PieSeries
+                    sourceSeries.Add(new PieSeries<int>
                     {
-                        Title      = "Consolidated",
-                        Values     = new ChartValues<int> { consolidatedList.Count },
-                        DataLabels = true
+                        Name       = "Consolidated",
+                        Values     = new int[] { consolidatedList.Count },
+                        DataLabelsFormatter = point => point.Model.ToString()
                     });
                 if (deptList.Any())
-                    sourceSeries.Add(new PieSeries
+                    sourceSeries.Add(new PieSeries<int>
                     {
-                        Title      = "Department Budget",
-                        Values     = new ChartValues<int> { deptList.Count },
-                        DataLabels = true
+                        Name       = "Department Budget",
+                        Values     = new int[] { deptList.Count },
+                        DataLabelsFormatter = point => point.Model.ToString()
                     });
                 StatusBreakdownSeries = sourceSeries;
 
@@ -218,28 +218,28 @@ namespace GoodGovernanceApp.ViewModels
                     .OrderBy(m => m.Year).ThenBy(m => m.Month)
                     .ToList();
 
-                var trendDept         = new ChartValues<decimal>();
-                var trendConsolidated = new ChartValues<decimal>();
+                var trendDept         = new ObservableCollection<double>();
+                var trendConsolidated = new ObservableCollection<double>();
                 var labels            = new ObservableCollection<string>();
 
                 foreach (var m in allMonths)
                 {
                     labels.Add($"{new DateTime(m.Year, m.Month, 1):MMM yyyy}");
 
-                    trendDept.Add(deptList
+                    trendDept.Add((double)deptList
                         .Where(t => t.TransactionDate.HasValue && t.TransactionDate.Value.Year == m.Year && t.TransactionDate.Value.Month == m.Month)
                         .Sum(t => t.Amount));
 
-                    trendConsolidated.Add(consolidatedList
+                    trendConsolidated.Add((double)consolidatedList
                         .Where(t => t.TransactionDate.HasValue && t.TransactionDate.Value.Year == m.Year && t.TransactionDate.Value.Month == m.Month)
                         .Sum(t => t.Amount));
                 }
 
                 MonthlyLabels = labels;
-                MonthlyTrendSeries = new SeriesCollection
+                MonthlyTrendSeries = new ObservableCollection<ISeries>
                 {
-                    new ColumnSeries { Title = "Department Budget", Values = trendDept         },
-                    new ColumnSeries { Title = "Consolidated",      Values = trendConsolidated }
+                    new ColumnSeries<double> { Name = "Department Budget", Values = trendDept         },
+                    new ColumnSeries<double> { Name = "Consolidated",      Values = trendConsolidated }
                 };
             }
             catch (Exception ex)
@@ -257,3 +257,5 @@ namespace GoodGovernanceApp.ViewModels
         }
     }
 }
+
+

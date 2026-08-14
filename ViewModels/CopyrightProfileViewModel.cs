@@ -32,9 +32,9 @@ public class CopyrightProfileViewModel : ViewModelBase
     public ICommand BrowseCommand { get; }
     public ICommand SaveCommand { get; }
 
-    public CopyrightProfileViewModel()
+    public CopyrightProfileViewModel(DatabaseHelper dbHelper)
     {
-        _dbHelper = App.AppHost!.Services.GetRequiredService<DatabaseHelper>();
+        _dbHelper = dbHelper;
         BrowseCommand = new RelayCommand(_ => ExecuteBrowse());
         SaveCommand = new RelayCommand(async _ => await ExecuteSaveAsync());
 

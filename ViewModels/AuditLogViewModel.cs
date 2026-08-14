@@ -59,9 +59,9 @@ namespace GoodGovernanceApp.ViewModels
 
         public ICommand RefreshCommand { get; }
 
-        public AuditLogViewModel()
+        public AuditLogViewModel(AppDbContext dbContext)
         {
-            _dbContext = App.AppHost!.Services.GetRequiredService<AppDbContext>();
+            _dbContext = dbContext;
             RefreshCommand = new RelayCommand(async _ => await LoadLogsAsync());
 
             _ = LoadLogsAsync();

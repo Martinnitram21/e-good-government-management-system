@@ -12,9 +12,6 @@
         Background="{DynamicResource MaterialDesignPaper}"
         TextElement.FontFamily="{DynamicResource MaterialDesignFont}">
 
-    <Window.DataContext>
-        <viewmodels:AddProjectViewModel />
-    </Window.DataContext>
 
     <Window.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVis"/>

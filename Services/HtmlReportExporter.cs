@@ -1,12 +1,13 @@
 using System;
 using System.Collections.Generic;
+using Microsoft.Extensions.DependencyInjection;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Text;
 using GoodGovernanceApp.ViewModels;
-using LiveCharts;
-using LiveCharts.Wpf;
+using LiveChartsCore;
+using LiveChartsCore.SkiaSharpView;
 
 namespace GoodGovernanceApp.Services;
 
@@ -26,22 +27,22 @@ public static class HtmlReportExporter
     public static void ExportAndOpen(string reportType, ReportsViewModel vm)
     {
         string html = reportType switch {
-            "Financial Overview"                         => BuildFinancialOverview(vm),
-            "Consolidated Transactions Analytics"        => BuildConsolidatedAnalytics(vm),
-            "CRS Beneficiary Analytics"                  => BuildCrsAnalytics(vm),
-            "User Activity Log"                          => BuildUserActivityLog(vm),
-            "Budget Summary by Category"                 => BuildBudgetSummary(vm),
-            "Transaction History"                        => BuildTransactionHistory(vm),
-            "Parameters List"                            => BuildParametersList(vm),
-            "Office Budget Allocation"                   => BuildOfficeBudgetAllocation(vm),
-            "System Overview"                            => BuildSystemOverview(vm),
-            "Beneficiaries per Project"                  => BuildBeneficiariesPerProject(vm),
-            "Individual Beneficiaries Services Received" => BuildIndividualBeneficiaries(vm),
-            "Budget Utilization Report"                  => BuildBudgetUtilization(vm),
-            "Project Implementation Status Report"       => BuildProjectStatus(vm),
-            "Public Service Delivery Report"             => BuildPublicServiceDelivery(vm),
-            "Citizen Feedback Summary Report"            => BuildCitizenFeedback(vm),
-            "Beneficiary Master List"                    => BuildBeneficiaryMasterList(vm),
+            "Financial Overview"                         => BuildFinancialOverview(vm.Financial),
+            "Consolidated Transactions Analytics"        => BuildConsolidatedAnalytics(vm.Transaction),
+            "CRS Beneficiary Analytics"                  => BuildCrsAnalytics(vm.Beneficiary),
+            "User Activity Log"                          => BuildUserActivityLog(vm.SystemReports),
+            "Budget Summary by Category"                 => BuildBudgetSummary(vm.Financial),
+            "Transaction History"                        => BuildTransactionHistory(vm.Transaction),
+            "Parameters List"                            => BuildParametersList(vm.SystemReports),
+            "Office Budget Allocation"                   => BuildOfficeBudgetAllocation(vm.Financial),
+            "System Overview"                            => BuildSystemOverview(vm.SystemReports),
+            "Beneficiaries per Project"                  => BuildBeneficiariesPerProject(vm.Beneficiary),
+            "Individual Beneficiaries Services Received" => BuildIndividualBeneficiaries(vm.Beneficiary),
+            "Budget Utilization Report"                  => BuildBudgetUtilization(vm.Financial),
+            "Project Implementation Status Report"       => BuildProjectStatus(vm.Project),
+            "Public Service Delivery Report"             => BuildPublicServiceDelivery(vm.Transaction),
+            "Citizen Feedback Summary Report"            => BuildCitizenFeedback(vm.SystemReports),
+            "Beneficiary Master List"                    => BuildBeneficiaryMasterList(vm.Beneficiary),
             _                                            => BuildNotAvailable(reportType)
         };
         var safe = string.Concat(reportType.Split(Path.GetInvalidFileNameChars()));
@@ -237,22 +238,49 @@ body{background:#fff!important}
     }
 
     // â”€â”€ Series extraction â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-    private static List<(string L, double V)> FromPie(SeriesCollection? sc) =>
-        sc?.OfType<PieSeries>().Select(s=>(L:s.Title??"",V:s.Values?.Count>0?Convert.ToDouble(s.Values[0]):0d)).Where(x=>x.V>0).ToList()??new();
-
-    private static List<(string L, double V)> FromCol(SeriesCollection? sc, IEnumerable<string>? labels)
+    private static List<(string L, double V)> FromPie(IEnumerable<LiveChartsCore.ISeries>? sc)
     {
-        var col = sc?.OfType<ColumnSeries>().FirstOrDefault();
+        if (sc == null) return new();
+        var list = new List<(string L, double V)>();
+        foreach (var s in sc)
+        {
+            if (s.Values != null)
+            {
+                var valEnum = s.Values as System.Collections.IEnumerable;
+                if (valEnum != null) {
+                    var enumerator = valEnum.GetEnumerator();
+                    if (enumerator.MoveNext()) {
+                        double val = Convert.ToDouble(enumerator.Current);
+                        if (val > 0) list.Add((s.Name ?? "", val));
+                    }
+                }
+            }
+        }
+        return list;
+    }
+
+    private static List<(string L, double V)> FromCol(IEnumerable<LiveChartsCore.ISeries>? sc, IEnumerable<string>? labels)
+    {
+        var col = sc?.FirstOrDefault();
         if (col?.Values == null) return new();
         var lbls = labels?.ToList() ?? new();
-        return col.Values.Cast<object>().Select((v,i)=>(L:i<lbls.Count?lbls[i]:$"#{i+1}",V:Convert.ToDouble(v))).ToList();
+        var valEnum = col.Values as System.Collections.IEnumerable;
+        var list = new List<(string L, double V)>();
+        if (valEnum != null) {
+            int i = 0;
+            foreach (var v in valEnum) {
+                list.Add((i < lbls.Count ? lbls[i] : $"#{i+1}", Convert.ToDouble(v)));
+                i++;
+            }
+        }
+        return list;
     }
 
     // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     //  REPORT BUILDERS â€” one per report type
     // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
-    private static string BuildFinancialOverview(ReportsViewModel vm)
+    private static string BuildFinancialOverview(GoodGovernanceApp.ViewModels.Reports.FinancialReportsViewModel vm)
     {
         decimal bal=vm.TotalBudget-vm.TotalExpenses;
         double util=vm.TotalBudget>0?(double)(vm.TotalExpenses/vm.TotalBudget)*100:0;
@@ -261,17 +289,17 @@ body{background:#fff!important}
             +$"Budget utilization is {util:F1}% across {vm.TotalProjects} active projects and {vm.ActiveUsers} active users. "
             +(util>90?"Critically high utilization â€” immediate review required.":util>70?"Elevated utilization â€” monitor closely.":"Utilization is within healthy limits.");
         string kpis=$"<div class=\"kr k4\">{KC("Total Budget",FC(vm.TotalBudget),"#0F172A")}{KC("Total Expenses",FC(vm.TotalExpenses),"#7F1D1D")}{KC("Remaining Balance",FC(bal),bal>=0?"#14532D":"#7C2D12")}{KC("Active Projects",vm.TotalProjects.ToString(),"#1E3A5F")}</div>";
-        var dp=FromPie(vm.DeptBudgetSeries); var pp=FromPie(vm.ProjectBudgetSeries);
-        string charts=$"<div class=\"cr cr2\"><div class=\"cc\"><h4>Office Budget Distribution</h4>{SvgPie(dp)}</div><div class=\"cc\"><h4>Budget by Active Project</h4>{SvgPie(pp)}</div></div>";
+        var dp=FromPie(vm.DeptBudgetSeries);
+        string charts=$"<div class=\"cr cr1\"><div class=\"cc\"><h4>Office Budget Distribution</h4>{SvgPie(dp)}</div></div>";
         var body=new StringBuilder();
         body.Append(Exec(summary));
         body.Append(Sec("Key Performance Indicators",kpis));
-        body.Append(Sec("Budget Distribution Analysis",Nar("The donut charts illustrate how the total budget is allocated across offices and projects. Disproportionate concentration in one department should be reviewed against actual service delivery outcomes.")+charts));
+        body.Append(Sec("Budget Distribution Analysis",Nar("The donut chart illustrates how the total budget is allocated across offices. Disproportionate concentration in one department should be reviewed against actual service delivery outcomes.")+charts));
         body.Append(bal<0?Wbox($"Expenses exceeded budget by {FC(-bal)}. Immediate corrective action required."):util>80?Wbox($"Utilization at {util:F1}%. Only {FC(bal)} remains. Closely monitor spending."):Hbox($"Financial position is healthy. {FC(bal)} remains ({100-util:F1}% of total budget)."));
         return Wrap("Financial Overview","Comprehensive budget and expenditure summary",body.ToString(),"#0F172A","#2563EB");
     }
 
-    private static string BuildConsolidatedAnalytics(ReportsViewModel vm)
+    private static string BuildConsolidatedAnalytics(GoodGovernanceApp.ViewModels.Reports.TransactionReportsViewModel vm)
     {
         string summary=$"This report consolidates all government transactions. {vm.ConsolidatedTotalCount:N0} transactions were processed "
             +$"totalling {FC(vm.ConsolidatedTotalAmount)}, with an average of {FC(vm.ConsolidatedAvgAmount)} per transaction. "
@@ -287,12 +315,15 @@ body{background:#fff!important}
         return Wrap("Consolidated Transactions Analytics","System-wide transaction volume and distribution",body.ToString(),"#1E3A5F","#3B82F6");
     }
 
-    private static string BuildCrsAnalytics(ReportsViewModel vm)
+    private static string BuildCrsAnalytics(GoodGovernanceApp.ViewModels.Reports.BeneficiaryReportsViewModel vm)
     {
         int reg=vm.CrsTotalCount-vm.CrsPwdCount-vm.CrsSeniorCount;
         double pp=vm.CrsTotalCount>0?(double)vm.CrsPwdCount/vm.CrsTotalCount*100:0;
         double sp=vm.CrsTotalCount>0?(double)vm.CrsSeniorCount/vm.CrsTotalCount*100:0;
-        string src=ConnectivityService.IsCrsOnline?"Live CRS (online)":"Local cache (offline)";
+        using var serviceScope = App.AppHost?.Services.CreateScope();
+        var connectivityService = serviceScope?.ServiceProvider.GetService<GoodGovernanceApp.Services.IConnectivityService>();
+        bool isCrsOnline = connectivityService?.IsCrsOnline ?? false;
+        string src=isCrsOnline?"Live CRS (online)":"Local cache (offline)";
         string summary=$"The CRS holds {vm.CrsTotalCount:N0} registered beneficiaries: {vm.CrsPwdCount:N0} ({pp:F1}%) PWD, "
             +$"{vm.CrsSeniorCount:N0} ({sp:F1}%) Senior Citizens, and {reg:N0} regular community members. Source: {src}.";
         string kpis=$"<div class=\"kr k3\">{KC("Total Beneficiaries",vm.CrsTotalCount.ToString("N0"),"#0F172A")}{KC($"PWD ({pp:F1}%)",vm.CrsPwdCount.ToString("N0"),"#312E81")}{KC($"Senior ({sp:F1}%)",vm.CrsSeniorCount.ToString("N0"),"#7F1D1D")}</div>";
@@ -304,11 +335,11 @@ body{background:#fff!important}
         body.Append(Sec("Beneficiary KPIs",kpis));
         body.Append(Sec("Demographics",Nar("Gender and age charts confirm whether services reach all population segments. Equitable representation across gender and age groups reflects inclusive programme design.")+charts));
         body.Append(Sec("Classification Breakdown",Nar("High PWD/Senior proportions indicate a need for inclusive, accessible service delivery. This informs infrastructure, staffing, and communication strategies.")+PBars(cls)));
-        if(!ConnectivityService.IsCrsOnline) body.Append(Wbox("CRS is offline. Data is from the last local cache sync and may not be current."));
+        if(!isCrsOnline) body.Append(Wbox("CRS is offline. Data is from the last local cache sync and may not be current."));
         return Wrap("CRS Beneficiary Analytics","Community Relations System demographic report",body.ToString(),"#312E81","#6366F1");
     }
 
-    private static string BuildUserActivityLog(ReportsViewModel vm)
+    private static string BuildUserActivityLog(GoodGovernanceApp.ViewModels.Reports.SystemReportsViewModel vm)
     {
         var logs=vm.UserActivityLogs.ToList();
         var byU=logs.GroupBy(l=>l.User?.Name??"System").Select(g=>(N:g.Key,C:g.Count(),Last:g.Max(l=>l.Timestamp))).OrderByDescending(x=>x.C).ToList();
@@ -329,7 +360,7 @@ body{background:#fff!important}
         return Wrap("User Activity Log","System audit trail and user action history",body.ToString(),"#0F172A","#0EA5E9");
     }
 
-    private static string BuildBudgetSummary(ReportsViewModel vm)
+    private static string BuildBudgetSummary(GoodGovernanceApp.ViewModels.Reports.FinancialReportsViewModel vm)
     {
         var rows=vm.BudgetSummaries.OfType<object>().Select(o=>(dynamic)o).ToList();
         string summary=$"This report covers budget allocation and expenditure across {rows.Count} programme categories. "
@@ -348,7 +379,7 @@ body{background:#fff!important}
         return Wrap("Budget Summary by Category","Expenditure analysis by programme category",body.ToString(),"#14532D","#10B981");
     }
 
-    private static string BuildTransactionHistory(ReportsViewModel vm)
+    private static string BuildTransactionHistory(GoodGovernanceApp.ViewModels.Reports.TransactionReportsViewModel vm)
     {
         var txns=vm.TransactionHistory.ToList();
         var byT=txns.GroupBy(t=>t.TransactionType??"Unknown").Select(g=>(T:g.Key,C:g.Count(),Total:g.Sum(t=>t.Amount))).OrderByDescending(x=>x.Total).ToList();
@@ -367,7 +398,7 @@ body{background:#fff!important}
         return Wrap("Transaction History","Complete departmental financial transaction records",body.ToString(),"#0F172A","#3B82F6");
     }
 
-    private static string BuildParametersList(ReportsViewModel vm)
+    private static string BuildParametersList(GoodGovernanceApp.ViewModels.Reports.SystemReportsViewModel vm)
     {
         var ps=vm.ParametersList.ToList();
         string summary=$"The system contains {ps.Count} configuration parameters controlling key aspects of GGMS behaviour. "
@@ -379,7 +410,7 @@ body{background:#fff!important}
         return Wrap("Parameters List","System configuration parameters and reference values",body.ToString(),"#0F172A","#64748B");
     }
 
-    private static string BuildOfficeBudgetAllocation(ReportsViewModel vm)
+    private static string BuildOfficeBudgetAllocation(GoodGovernanceApp.ViewModels.Reports.FinancialReportsViewModel vm)
     {
         var allocs=vm.DepartmentalBudgets.OfType<object>().Select(o=>(dynamic)o).ToList();
         decimal grand=0; try{grand=allocs.Sum(a=>(decimal)a.Allocated);}catch{}
@@ -400,7 +431,7 @@ body{background:#fff!important}
         return Wrap("Office Budget Allocation","Annual budget distribution by government office",body.ToString(),"#14532D","#10B981");
     }
 
-    private static string BuildSystemOverview(ReportsViewModel vm)
+    private static string BuildSystemOverview(GoodGovernanceApp.ViewModels.Reports.SystemReportsViewModel vm)
     {
         var items=vm.SystemOverview.OfType<object>().Select(o=>(dynamic)o).ToList();
         string summary=$"System-wide metrics snapshot as of {DateTime.Now:MMMM dd, yyyy}. "
@@ -417,7 +448,7 @@ body{background:#fff!important}
         return Wrap("System Overview","Executive dashboard â€” all key system metrics",body.ToString(),"#0F172A","#334155");
     }
 
-    private static string BuildBeneficiariesPerProject(ReportsViewModel vm)
+    private static string BuildBeneficiariesPerProject(GoodGovernanceApp.ViewModels.Reports.BeneficiaryReportsViewModel vm)
     {
         var rows=vm.BeneficiariesPerProject.OfType<object>().Select(o=>(dynamic)o).ToList();
         int tb=0; decimal ta=0; try{tb=rows.Sum(r=>(int)r.BeneficiaryCount);ta=rows.Sum(r=>(decimal)r.TotalAmount);}catch{}
@@ -435,7 +466,7 @@ body{background:#fff!important}
         return Wrap("Beneficiaries per Project","Reach and service delivery analysis by project",body.ToString(),"#14532D","#10B981");
     }
 
-    private static string BuildIndividualBeneficiaries(ReportsViewModel vm)
+    private static string BuildIndividualBeneficiaries(GoodGovernanceApp.ViewModels.Reports.BeneficiaryReportsViewModel vm)
     {
         var rows=vm.IndividualBeneficiaries.OfType<object>().Select(o=>(dynamic)o).ToList();
         decimal ta=0; try{ta=rows.Sum(r=>(decimal)r.TotalAmount);}catch{}
@@ -453,7 +484,7 @@ body{background:#fff!important}
         return Wrap("Individual Beneficiaries Services Received","Per-person breakdown of government services received",body.ToString(),"#312E81","#6366F1");
     }
 
-    private static string BuildBudgetUtilization(ReportsViewModel vm)
+    private static string BuildBudgetUtilization(GoodGovernanceApp.ViewModels.Reports.FinancialReportsViewModel vm)
     {
         var rows=vm.BudgetUtilization.OfType<object>().Select(o=>(dynamic)o).ToList();
         decimal tb=0,ts=0; try{tb=rows.Sum(r=>(decimal)r.Budget);ts=rows.Sum(r=>(decimal)r.Spent);}catch{}
@@ -474,7 +505,7 @@ body{background:#fff!important}
         return Wrap("Budget Utilization Report","Expenditure vs budget for all active projects",body.ToString(),"#92400E","#F59E0B");
     }
 
-    private static string BuildProjectStatus(ReportsViewModel vm)
+    private static string BuildProjectStatus(GoodGovernanceApp.ViewModels.Reports.ProjectReportsViewModel vm)
     {
         var rows=vm.ProjectStatusRows.OfType<object>().Select(o=>(dynamic)o).ToList();
         double ap=rows.Count>0?(double)vm.ActiveProjectCount/rows.Count*100:0;
@@ -495,7 +526,7 @@ body{background:#fff!important}
         return Wrap("Project Implementation Status Report","Programme portfolio with budget and lifecycle tracking",body.ToString(),"#1E3A5F","#3B82F6");
     }
 
-    private static string BuildPublicServiceDelivery(ReportsViewModel vm)
+    private static string BuildPublicServiceDelivery(GoodGovernanceApp.ViewModels.Reports.TransactionReportsViewModel vm)
     {
         var rows=vm.PublicServiceRows.OfType<object>().Select(o=>(dynamic)o).ToList();
         int tb=0; decimal ta=0; try{tb=rows.Sum(r=>(int)r.BeneficiaryCount);ta=rows.Sum(r=>(decimal)r.TotalAmount);}catch{}
@@ -515,7 +546,7 @@ body{background:#fff!important}
         return Wrap("Public Service Delivery Report","Citizens reached and services rendered by office",body.ToString(),"#0C4A6E","#06B6D4");
     }
 
-    private static string BuildCitizenFeedback(ReportsViewModel vm)
+    private static string BuildCitizenFeedback(GoodGovernanceApp.ViewModels.Reports.SystemReportsViewModel vm)
     {
         var rows=vm.CitizenFeedbackRows.OfType<object>().Select(o=>(dynamic)o).ToList();
         double avg=vm.AvgFeedbackScore; int total=vm.TotalFeedbackCount;
@@ -539,10 +570,11 @@ body{background:#fff!important}
         return Wrap("Citizen Feedback Summary Report","Service quality evaluation and citizen satisfaction analysis",body.ToString(),"#1E3A5F","#6366F1");
     }
 
-    private static string BuildBeneficiaryMasterList(ReportsViewModel vm)
+    private static string BuildBeneficiaryMasterList(GoodGovernanceApp.ViewModels.Reports.BeneficiaryReportsViewModel vm)
     {
         var rows=vm.BeneficiaryMasterList.OfType<object>().Select(o=>(dynamic)o).ToList();
-        string src=ConnectivityService.IsCrsOnline?"Live CRS (online)":"Local CRS cache (offline)";
+        bool isCrsOnline = App.AppHost?.Services.GetRequiredService<GoodGovernanceApp.Services.IConnectivityService>().IsCrsOnline ?? false;
+        string src=isCrsOnline?"Live CRS (online)":"Local CRS cache (offline)";
         double pp=vm.BmlTotalBeneficiaries>0?(double)vm.BmlPwdCount/vm.BmlTotalBeneficiaries*100:0;
         double sp=vm.BmlTotalBeneficiaries>0?(double)vm.BmlSeniorCount/vm.BmlTotalBeneficiaries*100:0;
         string summary=$"The Beneficiary Master List enriches consolidated transaction records with CRS profiles ({src}). "
@@ -564,7 +596,7 @@ body{background:#fff!important}
         body.Append(Sec("Demographics",Nar("Gender and classification charts confirm whether services reach the most vulnerable groups. High PWD/Senior proportions indicate strong inclusion of priority populations.")+ch1));
         body.Append(Sec("Service Patterns",Nar("Top-10 chart identifies highest-value recipients. Monthly trend reveals whether service delivery is growing or declining â€” consistent growth signals programme expansion and improved community access.")+ch2));
         body.Append(Sec("Complete Beneficiary List",Nar($"Source: {src}. Fields showing 'â€”' indicate unmatched CRS profiles requiring data reconciliation.")+Tbl(new[]{"ID","Full Name","Sex","Age","Barangay","Address","PWD","Senior","Services","Total Received","Last Service"},tr)));
-        if(!ConnectivityService.IsCrsOnline) body.Append(Wbox("Profile data from local CRS cache. Reconnect to CRS for accuracy."));
+        if(!isCrsOnline) body.Append(Wbox("Profile data from local CRS cache. Reconnect to CRS for accuracy."));
         return Wrap("Beneficiary Master List","Consolidated registry with CRS profile enrichment",body.ToString(),"#0F172A","#6366F1");
     }
 
@@ -572,3 +604,4 @@ body{background:#fff!important}
         Wrap($"{t} â€” Not Available","Export template not yet available",
             $"<div class=\"exec\"><h3>Notice</h3><p>The '{E(t)}' report does not have a printable export template yet.</p></div>");
 }
+

@@ -45,9 +45,9 @@ public class ApplicationProfileViewModel : ViewModelBase
     public ICommand BrowseCommand { get; }
     public ICommand SaveCommand { get; }
 
-    public ApplicationProfileViewModel()
+    public ApplicationProfileViewModel(DatabaseHelper dbHelper)
     {
-        _dbHelper = App.AppHost!.Services.GetRequiredService<DatabaseHelper>();
+        _dbHelper = dbHelper;
         BrowseCommand = new RelayCommand(_ => ExecuteBrowse());
         SaveCommand = new RelayCommand(async _ => await ExecuteSaveAsync());
 
@@ -61,7 +61,7 @@ public class ApplicationProfileViewModel : ViewModelBase
             // Ensure table exists
             string createTableQuery = @"
                 CREATE TABLE IF NOT EXISTS goveprofile (
-                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
                     GoveName NVARCHAR(255),
                     Address NVARCHAR(255),
                     LogoAddress NVARCHAR(500)
@@ -180,7 +180,7 @@ public class ApplicationProfileViewModel : ViewModelBase
                 string updateQuery = @"
                     UPDATE goveprofile 
                     SET GoveName = @goveName, Address = @address, LogoAddress = @logoAddress 
-                    ORDER BY id ASC LIMIT 1;";
+                    WHERE id IN (SELECT id FROM goveprofile ORDER BY id ASC LIMIT 1);";
                 
                 await _dbHelper.ExecuteNonQueryAsync(updateQuery,
                     new SqliteParameter("@goveName", GoveName),

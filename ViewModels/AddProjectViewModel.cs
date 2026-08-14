@@ -90,8 +90,10 @@ public class AddProjectViewModel : ViewModelBase
     // Raised when save succeeds – the Window subscribes to close itself
     public event EventHandler? SaveSucceeded;
 
+    private readonly GoodGovernanceApp.Services.SessionService _sessionService;
+
     // ── Constructor ──────────────────────────────────────────────────────────────
-    public AddProjectViewModel()
+    public AddProjectViewModel(DatabaseHelper db, GoodGovernanceApp.Services.SessionService sessionService)
     {
         // Design-time safety check for Visual Studio XAML Designer
         if (App.AppHost == null)
@@ -101,7 +103,8 @@ public class AddProjectViewModel : ViewModelBase
             return;
         }
 
-        _db = App.AppHost.Services.GetRequiredService<DatabaseHelper>();
+        _db = db;
+        _sessionService = sessionService;
 
         SaveCommand   = new RelayCommand(async _ => await SaveAsync(), _ => CanSave());
         CancelCommand = new RelayCommand(_ => { });
@@ -349,8 +352,7 @@ public class AddProjectViewModel : ViewModelBase
         // --- INSERT 2: audit_trails ---
         try
         {
-            var session = App.AppHost!.Services.GetRequiredService<GoodGovernanceApp.Services.SessionService>();
-            long userId = session.CurrentUser?.Id ?? 0;
+            long userId = _sessionService.CurrentUser?.Id ?? 0;
             
             const string auditSql = @"
             INSERT INTO audit_trails 

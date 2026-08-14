@@ -4,8 +4,8 @@ using System.Linq;
 using System.Threading.Tasks;
 using GoodGovernanceApp.Data;
 using GoodGovernanceApp.Models;
-using LiveCharts;
-using LiveCharts.Wpf;
+using LiveChartsCore;
+using LiveChartsCore.SkiaSharpView;
 using Microsoft.EntityFrameworkCore;
 
 namespace GoodGovernanceApp.ViewModels
@@ -47,8 +47,8 @@ namespace GoodGovernanceApp.ViewModels
 
         public ObservableCollection<ConsolidatedTransactionsViewModel> ProjectTransactions { get; } = new();
 
-        private SeriesCollection _typeBreakdownSeries = new();
-        public SeriesCollection TypeBreakdownSeries
+        private ObservableCollection<ISeries> _typeBreakdownSeries = new();
+        public ObservableCollection<ISeries> TypeBreakdownSeries
         {
             get => _typeBreakdownSeries;
             set { _typeBreakdownSeries = value; OnPropertyChanged(); }
@@ -113,16 +113,16 @@ namespace GoodGovernanceApp.ViewModels
                 if (!combinedList.Any()) return;
 
                 // 8. Pie Chart - Amount by Transaction Type
-                var typeSeries = new SeriesCollection();
+                var typeSeries = new ObservableCollection<ISeries>();
                 foreach (var grp in combinedList
                     .GroupBy(t => t.TransactionType ?? "Unknown")
                     .Select(g => new { Type = g.Key, Amount = g.Sum(x => x.Amount) }))
                 {
-                    typeSeries.Add(new PieSeries
+                    typeSeries.Add(new PieSeries<double>
                     {
-                        Title      = grp.Type,
-                        Values     = new ChartValues<decimal> { grp.Amount },
-                        DataLabels = true
+                        Name       = grp.Type,
+                        Values     = new double[] { (double)grp.Amount },
+                        DataLabelsFormatter = point => point.Model.ToString()
                     });
                 }
                 TypeBreakdownSeries = typeSeries;
@@ -142,3 +142,5 @@ namespace GoodGovernanceApp.ViewModels
         }
     }
 }
+
+

@@ -93,9 +93,9 @@ public class BudgetAllocationViewModel : ViewModelBase
     public ICommand ViewProjectsCommand { get; }
     public ICommand AddProjectCommand { get; }
 
-    public BudgetAllocationViewModel()
+    public BudgetAllocationViewModel(AppDbContext context)
     {
-        _context = App.AppHost!.Services.GetRequiredService<AppDbContext>();
+        _context = context;
 
         SaveAllocationsCommand = new RelayCommand(async _ => await SaveAllocationsAsync(), _ => SelectedMasterBudget != null);
         ViewProjectsCommand = new RelayCommand(_ => OpenProjectsPopup(), _ => SelectedOffice != null && OfficeProjects.Any());
@@ -380,6 +380,7 @@ public class BudgetAllocationViewModel : ViewModelBase
 
         var window = new Views.AddProjectWindow
         {
+            DataContext = App.AppHost?.Services.GetRequiredService<AddProjectViewModel>(),
             Owner = System.Windows.Application.Current.Windows.OfType<Views.MainWindow>().FirstOrDefault()
         };
 

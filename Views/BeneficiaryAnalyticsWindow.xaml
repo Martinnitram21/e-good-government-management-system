@@ -4,7 +4,7 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
-        xmlns:lvc="clr-namespace:LiveCharts.Wpf;assembly=LiveCharts.Wpf"
+        xmlns:lvc="clr-namespace:LiveChartsCore.SkiaSharpView.WPF;assembly=LiveChartsCore.SkiaSharpView.WPF"
         mc:Ignorable="d"
         Title="Beneficiary Analytics" Height="800" Width="1200"
         WindowStartupLocation="CenterScreen"
@@ -287,7 +287,7 @@
                         <RowDefinition Height="*"/>
                     </Grid.RowDefinitions>
                     <TextBlock Text="Amount by Transaction Type" FontWeight="SemiBold" Margin="8 8 0 8"/>
-                    <lvc:PieChart Grid.Row="1" Series="{Binding TypeBreakdownSeries}" LegendLocation="Bottom" Hoverable="True"/>
+                    <lvc:PieChart Grid.Row="1" Series="{Binding TypeBreakdownSeries}" LegendPosition="Bottom" />
                 </Grid>
             </materialDesign:Card>
 
@@ -299,7 +299,7 @@
                         <RowDefinition Height="*"/>
                     </Grid.RowDefinitions>
                     <TextBlock Text="Transaction Source Count" FontWeight="SemiBold" Margin="8 8 0 8"/>
-                    <lvc:PieChart Grid.Row="1" Series="{Binding StatusBreakdownSeries}" LegendLocation="Bottom" Hoverable="True"/>
+                    <lvc:PieChart Grid.Row="1" Series="{Binding StatusBreakdownSeries}" LegendPosition="Bottom" />
                 </Grid>
             </materialDesign:Card>
 
@@ -311,7 +311,7 @@
                         <RowDefinition Height="*"/>
                     </Grid.RowDefinitions>
                     <TextBlock Text="Spending by Office Code" FontWeight="SemiBold" Margin="8 8 0 8"/>
-                    <lvc:PieChart Grid.Row="1" Series="{Binding OfficeBreakdownSeries}" LegendLocation="Bottom" Hoverable="True"/>
+                    <lvc:PieChart Grid.Row="1" Series="{Binding OfficeBreakdownSeries}" LegendPosition="Bottom" />
                 </Grid>
             </materialDesign:Card>
 
@@ -331,12 +331,7 @@
                         </Grid.RowDefinitions>
                         <TextBlock Text="Monthly Trend" FontWeight="SemiBold" Margin="8 8 0 8"/>
                         <lvc:CartesianChart Grid.Row="1" Series="{Binding MonthlyTrendSeries}" Margin="8">
-                            <lvc:CartesianChart.AxisX>
-                                <lvc:Axis Labels="{Binding MonthlyLabels}" />
-                            </lvc:CartesianChart.AxisX>
-                            <lvc:CartesianChart.AxisY>
-                                <lvc:Axis LabelFormatter="{Binding Formatter}" />
-                            </lvc:CartesianChart.AxisY>
+                            
                         </lvc:CartesianChart>
                     </Grid>
                 </materialDesign:Card>
@@ -381,3 +376,4 @@
         </Border>
     </Grid>
 </Window>
+

@@ -11,8 +11,28 @@ namespace GoodGovernanceApp.Services;
 /// Mirrors the cloud-first / SQLite-cache-fallback pattern used in
 /// CrsBeneficiaryViewModel. Never writes to the CRS database.
 /// </summary>
-public static class CrsBeneficiaryService
+public interface ICrsBeneficiaryService
 {
+    Task<Beneficiary?> GetByIdAsync(string beneficiaryId);
+}
+
+/// <summary>
+/// READ-ONLY access to the CRS beneficiary data for a single beneficiary_id.
+/// Mirrors the cloud-first / SQLite-cache-fallback pattern used in
+/// CrsBeneficiaryViewModel. Never writes to the CRS database.
+/// </summary>
+public class CrsBeneficiaryService : ICrsBeneficiaryService
+{
+    private readonly IServiceScopeFactory _scopeFactory;
+    private readonly IConnectivityService _connectivityService;
+    private readonly IDatabaseConfig _dbConfig;
+
+    public CrsBeneficiaryService(IServiceScopeFactory scopeFactory, IConnectivityService connectivityService, IDatabaseConfig dbConfig)
+    {
+        _scopeFactory = scopeFactory;
+        _connectivityService = connectivityService;
+        _dbConfig = dbConfig;
+    }
     /// <summary>
     /// Returns the CRS <see cref="Beneficiary"/> record for the given
     /// <paramref name="beneficiaryId"/>, or <c>null</c> if no record exists.
@@ -23,14 +43,14 @@ public static class CrsBeneficiaryService
     ///      <c>beneficiary_id</c> match and update the local SQLite cache on the way.
     ///   2. Otherwise → fall back to <c>crs_beneficiary_cache</c> in SQLite.
     /// </remarks>
-    public static async Task<Beneficiary?> GetByIdAsync(string beneficiaryId)
+    public async Task<Beneficiary?> GetByIdAsync(string beneficiaryId)
     {
         if (string.IsNullOrWhiteSpace(beneficiaryId))
             return null;
 
         try
         {
-            if (ConnectivityService.IsCrsOnline)
+            if (_connectivityService.IsCrsOnline)
                 return await FetchFromCloudAsync(beneficiaryId);
             else
                 return await FetchFromCacheAsync(beneficiaryId);
@@ -47,9 +67,9 @@ public static class CrsBeneficiaryService
     }
 
     // ── Cloud fetch ─────────────────────────────────────────────────────────────
-    private static async Task<Beneficiary?> FetchFromCloudAsync(string beneficiaryId)
+    private async Task<Beneficiary?> FetchFromCloudAsync(string beneficiaryId)
     {
-        using var conn = new MySqlConnector.MySqlConnection(DatabaseConfig.CrsConnectionString);
+        using var conn = new MySqlConnector.MySqlConnection(_dbConfig.CrsConnectionString);
         await conn.OpenAsync();
 
         const string sql = @"
@@ -106,10 +126,10 @@ public static class CrsBeneficiaryService
         return b;
     }
 
-    // ── SQLite cache fetch ──────────────────────────────────────────────────────
-    private static async Task<Beneficiary?> FetchFromCacheAsync(string beneficiaryId)
+    private async Task<Beneficiary?> FetchFromCacheAsync(string beneficiaryId)
     {
-        var dbContext = App.AppHost!.Services.GetRequiredService<AppDbContext>();
+        using var scope = _scopeFactory.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
         var cache = await System.Threading.Tasks.Task.Run(() =>
             dbContext.CrsBeneficiaryCaches
@@ -138,11 +158,12 @@ public static class CrsBeneficiaryService
     }
 
     // ── Cache writer (fire-and-forget, errors are non-fatal) ───────────────────
-    private static async Task UpdateCacheAsync(Beneficiary b)
+    private async Task UpdateCacheAsync(Beneficiary b)
     {
         try
         {
-            var dbContext = App.AppHost!.Services.GetRequiredService<AppDbContext>();
+            using var scope = _scopeFactory.CreateScope();
+            var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
             var cache = await System.Threading.Tasks.Task.Run(() =>
                 dbContext.CrsBeneficiaryCaches
