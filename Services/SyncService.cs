@@ -40,6 +40,13 @@ public class SyncService : ISyncService
     {
         _ = Task.Run(async () =>
         {
+            // Initial sync on startup as soon as network is ready
+            await Task.Delay(TimeSpan.FromSeconds(2));
+            if (_connectivityService.IsOnline && !_isSyncing)
+            {
+                await SyncNowAsync();
+            }
+
             while (true)
             {
                 await Task.Delay(TimeSpan.FromMinutes(5));
@@ -48,6 +55,14 @@ public class SyncService : ISyncService
                     await SyncNowAsync();
             }
         });
+
+        _connectivityService.OnConnectionStatusChanged += (isOnline) =>
+        {
+            if (isOnline && !_isSyncing)
+            {
+                _ = Task.Run(SyncNowAsync);
+            }
+        };
     }
 
     public async Task SyncNowAsync()
@@ -304,8 +319,9 @@ public class SyncService : ISyncService
             else
             {
                 // UPDATE via raw SQL — never touches EF change tracker
-                var cloudAt = (DateTime?)updatedProp.GetValue(cloudMatch);
-                if (localAt > cloudAt)
+                var cloudAt = (DateTime?)updatedProp.GetValue(cloudMatch) ?? DateTime.MinValue;
+                var localTime = localAt ?? DateTime.MinValue;
+                if (localTime > cloudAt)
                     await RawSqlUpdateAsync(cloudConn, cloudTableName, cloudScalars, cloudPkNames, incoming: local, existing: cloudMatch, isMySql: true);
             }
         }
@@ -349,8 +365,9 @@ public class SyncService : ISyncService
             else
             {
                 // UPDATE via raw SQL — never touches EF change tracker
-                var localAt = (DateTime?)updatedProp.GetValue(localMatch);
-                if (cloudAt > localAt)
+                var localAt = (DateTime?)updatedProp.GetValue(localMatch) ?? DateTime.MinValue;
+                var cloudTime = cloudAt ?? DateTime.MinValue;
+                if (cloudTime > localAt)
                     await RawSqlUpdateAsync(localConn, localTableName, localScalars, localPkNames, incoming: cloud, existing: localMatch, isMySql: false);
             }
         }

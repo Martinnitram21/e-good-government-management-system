@@ -6,7 +6,7 @@
         xmlns:converters="clr-namespace:GoodGovernanceApp.Converters"
         xmlns:components="clr-namespace:GoodGovernanceApp.Views.Components"
         Title="Good Governance Management System"
-        Icon="/Assets/Images/ggms.ico"
+        Icon="pack://application:,,,/GoodGovernanceApp;component/Assets/Images/ggms.ico"
         Height="780" Width="1280"
         MinHeight="640" MinWidth="960"
         WindowStartupLocation="CenterScreen"

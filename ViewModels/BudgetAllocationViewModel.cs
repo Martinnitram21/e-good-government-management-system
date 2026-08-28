@@ -344,17 +344,27 @@ public class BudgetAllocationViewModel : ViewModelBase
 
         foreach (var vm in DepartmentAllocations)
         {
+            vm.Model.AllocatedAmount = vm.Amount;
+            vm.Model.MasterBudgetId = SelectedMasterBudget.Id;
+            vm.Model.OfficeCode = vm.OfficeCode;
+            vm.Model.UpdatedAt = DateTime.Now;
+            vm.Model.updated_at = DateTime.Now;
+
             if (vm.Model.Id == 0 && vm.Amount > 0)
             {
-                vm.Model.AllocatedAmount = vm.Amount;
                 _context.BudgetAllocations.Add(vm.Model);
             }
             else if (vm.Model.Id != 0)
             {
-                vm.Model.AllocatedAmount = vm.Amount;
                 _context.Update(vm.Model);
             }
         }
+
+        decimal totalAllocated = DepartmentAllocations.Sum(a => a.Amount);
+        SelectedMasterBudget.AllocatedBudget = totalAllocated;
+        SelectedMasterBudget.RemainingBudget = SelectedMasterBudget.TotalAmount - totalAllocated;
+        SelectedMasterBudget.UpdatedAt = DateTime.Now;
+        _context.Update(SelectedMasterBudget);
 
         await _context.SaveChangesAsync();
         // Reload to refresh SpentAmount/Remaining
@@ -419,6 +429,7 @@ public class OfficeAllocationItemViewModel : ViewModelBase
         set
         {
             _amount = value;
+            Model.AllocatedAmount = value;
             OnPropertyChanged();
             OnPropertyChanged(nameof(Remaining));
             OnPropertyChanged(nameof(AmountDisplay));

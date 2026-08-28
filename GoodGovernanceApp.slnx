@@ -1,3 +1,6 @@
 <Solution>
+  <Project Path="../Governance/Governance.vdproj" Type="Installer">
+    <Build />
+  </Project>
   <Project Path="GoodGovernanceApp.csproj" />
 </Solution>

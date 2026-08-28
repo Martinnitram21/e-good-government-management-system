@@ -43,6 +43,29 @@ public class AppDbContext : DbContext
 
     public AppDbContext(DbContextOptions<AppDbContext> options) : base(options) { }
 
+    public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
+    {
+        var entries = ChangeTracker.Entries()
+            .Where(e => e.State == EntityState.Added || e.State == EntityState.Modified);
+
+        foreach (var entry in entries)
+        {
+            var updatedProp = entry.Entity.GetType().GetProperty("UpdatedAt");
+            if (updatedProp != null && updatedProp.CanWrite && (updatedProp.PropertyType == typeof(DateTime) || updatedProp.PropertyType == typeof(DateTime?)))
+            {
+                updatedProp.SetValue(entry.Entity, DateTime.Now);
+            }
+
+            var updatedLowerProp = entry.Entity.GetType().GetProperty("updated_at");
+            if (updatedLowerProp != null && updatedLowerProp.CanWrite && (updatedLowerProp.PropertyType == typeof(DateTime) || updatedLowerProp.PropertyType == typeof(DateTime?)))
+            {
+                updatedLowerProp.SetValue(entry.Entity, DateTime.Now);
+            }
+        }
+
+        return base.SaveChangesAsync(cancellationToken);
+    }
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);

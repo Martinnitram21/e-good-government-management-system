@@ -8,7 +8,7 @@
         xmlns:converters="clr-namespace:GoodGovernanceApp.Converters"
         mc:Ignorable="d"
         Title="Good Governance Management - Login" 
-        Icon="/Assets/Images/ggms.ico"
+        Icon="pack://application:,,,/GoodGovernanceApp;component/Assets/Images/ggms.ico"
         Height="642" Width="965"
         WindowStartupLocation="CenterScreen" ResizeMode="NoResize"
         TextElement.Foreground="{DynamicResource MaterialDesignBody}"
@@ -40,7 +40,7 @@
       HorizontalAlignment="Stretch"
       VerticalAlignment="Stretch">
 
-            <Image Source="pack://application:,,,/Assets/Images/bg.jpg"
+            <Image Source="pack://application:,,,/GoodGovernanceApp;component/Assets/Images/bg.jpg"
            Stretch="UniformToFill"
            HorizontalAlignment="Center"
            VerticalAlignment="Center"/>

@@ -212,6 +212,7 @@ public class LoginViewModel : ViewModelBase
     {
         try
         {
+            string logoAddressFromDb = string.Empty;
             string query = "SELECT GoveName, LogoAddress, Address FROM goveprofile LIMIT 1;";
             var dataTable = await _dbHelper.ExecuteQueryAsync(query);
 
@@ -220,6 +221,7 @@ public class LoginViewModel : ViewModelBase
                 var row = dataTable.Rows[0];
                 string govName = row["GoveName"]?.ToString() ?? "";
                 string addr = row["Address"]?.ToString() ?? "";
+                logoAddressFromDb = row["LogoAddress"]?.ToString() ?? "";
 
                 if (!string.IsNullOrWhiteSpace(govName))
                     GovernanceName = govName;
@@ -228,44 +230,43 @@ public class LoginViewModel : ViewModelBase
                     Address = addr;
             }
 
-            // Load logo from Assets/Images instead
             await Task.Run(() =>
             {
-                var imagesDir = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Assets", "Images");
-                if (System.IO.Directory.Exists(imagesDir))
-                {
-                    var file = System.IO.Directory.EnumerateFiles(imagesDir, "*company*.*").FirstOrDefault();
-                    if (file == null)
-                    {
-                        file = System.IO.Directory.EnumerateFiles(imagesDir, "*logo*.*").FirstOrDefault();
-                    }
-                    if (file == null) 
-                    {
-                        file = System.IO.Directory.EnumerateFiles(imagesDir, "*gov*.*").FirstOrDefault();
-                    }
+                BitmapImage? img = null;
 
-                    if (file != null)
-                    {
-                        Application.Current.Dispatcher.Invoke(() =>
-                        {
-                            var bi = new BitmapImage();
-                            bi.BeginInit();
-                            bi.CacheOption = BitmapCacheOption.OnLoad;
-                            bi.UriSource = new Uri(file, UriKind.Absolute);
-                            bi.EndInit();
-                            LogoSource = bi;
-                        });
-                    }
+                // 1. Try DB path first if present
+                if (!string.IsNullOrWhiteSpace(logoAddressFromDb))
+                    img = ImageHelper.LoadBitmapSafe(logoAddressFromDb);
+
+                // 2. Try common filenames or any image in Assets/Images / AppData
+                if (img == null)
+                {
+                    string? foundFile = ImageHelper.ResolveFilePath("company_profile_logo.jpg")
+                        ?? ImageHelper.ResolveFilePath("logo.png")
+                        ?? ImageHelper.ResolveFilePath("logo.jpg");
+
+                    if (!string.IsNullOrEmpty(foundFile))
+                        img = ImageHelper.LoadBitmapSafe(foundFile);
+                }
+
+                // 3. Fallback to embedded pack URI or default icon
+                if (img == null)
+                {
+                    img = ImageHelper.LoadBitmapSafe("pack://application:,,,/GoodGovernanceApp;component/Assets/Images/company_profile_logo.jpg",
+                                                    "pack://application:,,,/GoodGovernanceApp;component/Assets/Images/ggms.ico");
+                }
+
+                if (img != null)
+                {
+                    Application.Current?.Dispatcher.Invoke(() => LogoSource = img);
                 }
             });
         }
-        catch (Exception ex) // ✅ CHANGE THIS TOO — never silently swallow errors
+        catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"[MethodName] Error: {ex.Message}");
+            System.Diagnostics.Debug.WriteLine($"[LoginViewModel] LoadApplicationProfileAsync Error: {ex.Message}");
         }
     }
-      
-    
 
     // ── System Photo ─────────────────────────────────────────────────────────
     private async Task LoadSystemPhotoAsync()
@@ -274,27 +275,23 @@ public class LoginViewModel : ViewModelBase
         {
             await Task.Run(() =>
             {
-                var imagesDir = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Assets", "Images");
-                if (System.IO.Directory.Exists(imagesDir))
-                {
-                    var file = System.IO.Directory.EnumerateFiles(imagesDir, "*system_profile*.*").FirstOrDefault();
-                    if (file == null) 
-                    {
-                        file = System.IO.Directory.EnumerateFiles(imagesDir, "*system*.*").FirstOrDefault();
-                    }
+                BitmapImage? img = null;
 
-                    if (file != null)
-                    {
-                        Application.Current.Dispatcher.Invoke(() =>
-                        {
-                            var bitmap = new BitmapImage();
-                            bitmap.BeginInit();
-                            bitmap.CacheOption = BitmapCacheOption.OnLoad;
-                            bitmap.UriSource = new Uri(file, UriKind.Absolute);
-                            bitmap.EndInit();
-                            SystemPhotoSource = bitmap;
-                        });
-                    }
+                string? foundFile = ImageHelper.ResolveFilePath("system_profile.png")
+                    ?? ImageHelper.ResolveFilePath("system_profile.jpg")
+                    ?? ImageHelper.ResolveFilePath("system.png");
+
+                if (!string.IsNullOrEmpty(foundFile))
+                    img = ImageHelper.LoadBitmapSafe(foundFile);
+
+                if (img == null)
+                {
+                    img = ImageHelper.LoadBitmapSafe("pack://application:,,,/GoodGovernanceApp;component/Assets/Images/system_profile.png");
+                }
+
+                if (img != null)
+                {
+                    Application.Current?.Dispatcher.Invoke(() => SystemPhotoSource = img);
                 }
             });
         }

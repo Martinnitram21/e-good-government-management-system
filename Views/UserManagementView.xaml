@@ -88,14 +88,14 @@
                                 Visibility="{Binding IsEditing, Converter={StaticResource BoolToVis}}"/>
 
                         <TextBox materialDesign:HintAssist.Hint="Username" 
-                         Foreground="#000000"
-             Text="{Binding SelectedUser.Name}" 
-             IsEnabled="{Binding IsEditing}" Margin="0 0 0 16" />
+                                 Foreground="#000000"
+                                 Text="{Binding SelectedUser.Name, UpdateSourceTrigger=PropertyChanged}" 
+                                 IsEnabled="{Binding IsEditing}" Margin="0 0 0 16" />
 
                         <TextBox materialDesign:HintAssist.Hint="Email" 
-                                  Foreground="#000000"
-             Text="{Binding SelectedUser.Email}" 
-             IsEnabled="{Binding IsEditing}" Margin="0 0 0 16" />
+                                 Foreground="#000000"
+                                 Text="{Binding SelectedUser.Email, UpdateSourceTrigger=PropertyChanged}" 
+                                 IsEnabled="{Binding IsEditing}" Margin="0 0 0 16" />
 
                         <PasswordBox materialDesign:HintAssist.Hint="Password (Leave blank to keep)"
                                      Name="UserPasswordBox"

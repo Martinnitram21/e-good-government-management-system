@@ -28,16 +28,9 @@ public class DatabaseConfig : IDatabaseConfig
     {
         get
         {
-            string dbMode = _config["AppSettings:DatabaseMode"] ?? "Local";
-            string key = dbMode switch
-            {
-                "Remote" => "RemoteConnection",
-                "LAN"    => "LanConnection",
-                _        => "LocalConnection"
-            };
-
-            return _config.GetConnectionString(key)
-                ?? throw new InvalidOperationException($"Connection string '{key}' not found in appsettings.json.");
+            return _config.GetConnectionString("RemoteConnection")
+                ?? _config.GetConnectionString("LocalConnection")
+                ?? "Server=194.59.164.58;Port=3306;Database=u621755393_ggms;User=u621755393_ggms_user;Password=Ggms@2026;AllowZeroDateTime=True;ConvertZeroDateTime=True;";
         }
     }
 
@@ -47,11 +40,11 @@ public class DatabaseConfig : IDatabaseConfig
         {
             var builder = new MySqlConnectionStringBuilder
             {
-                Server = _config["CrsConnection:Server"] ?? "localhost",
+                Server = _config["CrsConnection:Server"] ?? "svr12367.hstgr.io",
                 Port = uint.TryParse(_config["CrsConnection:Port"], out var p) ? p : 3306,
-                Database = _config["CrsConnection:Database"] ?? "crs_db",
-                UserID = _config["CrsConnection:User"] ?? "root",
-                Password = _config["CrsConnection:Password"] ?? "",
+                Database = _config["CrsConnection:Database"] ?? "u621755393_crs",
+                UserID = _config["CrsConnection:User"] ?? "u621755393_crs_user",
+                Password = _config["CrsConnection:Password"] ?? "Crs@2026",
                 AllowZeroDateTime = true,
                 ConvertZeroDateTime = true,
                 ConnectionTimeout = 15,
@@ -66,19 +59,36 @@ public class DatabaseConfig : IDatabaseConfig
         string crsServer, string crsPort, string crsDb, string crsUser, string crsPass)
     {
         string appDataFolder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "GoodGovernanceApp");
+        Directory.CreateDirectory(appDataFolder);
         string path = Path.Combine(appDataFolder, "appsettings.json");
-        string json = File.ReadAllText(path);
-        var root = JsonNode.Parse(json)!.AsObject();
 
-        root["AppSettings"]!["DatabaseMode"] = mode;
-
-        string key = mode switch
+        JsonObject root;
+        if (File.Exists(path))
         {
-            "Remote" => "RemoteConnection",
-            "LAN"    => "LanConnection",
-            _        => "LocalConnection"
-        };
-        root["ConnectionStrings"]![key] = ggmsConnStr;
+            try
+            {
+                string json = File.ReadAllText(path);
+                root = JsonNode.Parse(json)?.AsObject() ?? new JsonObject();
+            }
+            catch
+            {
+                root = new JsonObject();
+            }
+        }
+        else
+        {
+            root = new JsonObject();
+        }
+
+        if (!root.ContainsKey("AppSettings") || root["AppSettings"] is not JsonObject)
+            root["AppSettings"] = new JsonObject();
+        if (!root.ContainsKey("ConnectionStrings") || root["ConnectionStrings"] is not JsonObject)
+            root["ConnectionStrings"] = new JsonObject();
+        if (!root.ContainsKey("CrsConnection") || root["CrsConnection"] is not JsonObject)
+            root["CrsConnection"] = new JsonObject();
+
+        root["AppSettings"]!["DatabaseMode"] = "Remote";
+        root["ConnectionStrings"]!["RemoteConnection"] = ggmsConnStr;
 
         root["CrsConnection"]!["Server"]   = crsServer;
         root["CrsConnection"]!["Port"]     = crsPort;

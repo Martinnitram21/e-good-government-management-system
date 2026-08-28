@@ -104,7 +104,7 @@ public class ProfileViewModel : ViewModelBase
         var openFileDialog = new OpenFileDialog
         {
             Title = "Select Profile Photo",
-            Filter = "Image Files (*.jpg;*.jpeg;*.png;*.bmp)|*.jpg;*.jpeg;*.png;*.bmp|All files (*.*)|*.*"
+            Filter = ImageHelper.OpenImageFileDialogFilter
         };
 
         if (openFileDialog.ShowDialog() == true)
@@ -129,13 +129,7 @@ public class ProfileViewModel : ViewModelBase
 
                 // ✅ Save absolute path so it works from any run location
                 _profilePhotoPath = destinationPath;
-
-                var bitmap = new BitmapImage();
-                bitmap.BeginInit();
-                bitmap.CacheOption = BitmapCacheOption.OnLoad;
-                bitmap.UriSource = new Uri(destinationPath, UriKind.Absolute);
-                bitmap.EndInit();
-                ProfilePhotoSource = bitmap;
+                ProfilePhotoSource = ImageHelper.LoadBitmapSafe(destinationPath);
             }
             catch (Exception ex)
             {
@@ -143,8 +137,6 @@ public class ProfileViewModel : ViewModelBase
                     MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
-
-
     }
 
     private void LoadUserData()
@@ -157,19 +149,10 @@ public class ProfileViewModel : ViewModelBase
             Role      = currentUser.Role;
             OfficeName = currentUser.Office?.Name ?? "General / Unassigned";
             
-            if (!string.IsNullOrEmpty(currentUser.ProfilePhoto) && File.Exists(currentUser.ProfilePhoto))
+            if (!string.IsNullOrEmpty(currentUser.ProfilePhoto))
             {
                 _profilePhotoPath = currentUser.ProfilePhoto;
-                try
-                {
-                    var bitmap = new BitmapImage();
-                    bitmap.BeginInit();
-                    bitmap.CacheOption = BitmapCacheOption.OnLoad; // allows file to be released
-                    bitmap.UriSource = new Uri(currentUser.ProfilePhoto, UriKind.Absolute);
-                    bitmap.EndInit();
-                    ProfilePhotoSource = bitmap;
-                }
-                catch { /* Ignore image load errors */ }
+                ProfilePhotoSource = ImageHelper.LoadBitmapSafe(currentUser.ProfilePhoto);
             }
         }
     }

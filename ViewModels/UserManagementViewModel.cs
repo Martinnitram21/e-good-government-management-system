@@ -173,21 +173,15 @@ public class UserManagementViewModel : ViewModelBase
     public ICommand CancelCommand { get; }
     public ICommand RefreshValidateUsersCommand { get; }
     public ICommand UploadPhotoCommand { get; }
+    private readonly GoodGovernanceApp.Services.ISyncService? _syncService;
 
     // ── Constructor ───────────────────────────────────────────────────────────
-    public UserManagementViewModel(AppDbContext context)
+    public UserManagementViewModel(AppDbContext context, GoodGovernanceApp.Services.ISyncService? syncService = null)
     {
-        try
-        {
-            _context = context;
-            LoadData();
-        }
-        catch (Exception ex)
-        {
+        _context = context;
+        _syncService = syncService;
 
-
-            _context = null!;
-        }
+        LoadData();
 
         _usersView = CollectionViewSource.GetDefaultView(Users);
         _usersView.Filter = FilterUsers;
@@ -199,6 +193,17 @@ public class UserManagementViewModel : ViewModelBase
         CancelCommand = new RelayCommand(ExecuteCancel);
         RefreshValidateUsersCommand = new RelayCommand(_ => LoadValidateUsers());
         UploadPhotoCommand = new RelayCommand(_ => ExecuteUploadPhoto(), _ => IsEditing);
+
+        if (_syncService != null)
+        {
+            _syncService.OnSyncStatusChanged += (isSyncing) =>
+            {
+                if (!isSyncing)
+                {
+                    System.Windows.Application.Current?.Dispatcher.Invoke(LoadData);
+                }
+            };
+        }
     }
 
     // ── Data Loading ──────────────────────────────────────────────────────────
@@ -206,32 +211,49 @@ public class UserManagementViewModel : ViewModelBase
     {
         try
         {
-            _context.Users
-                .Include(u => u.Office)
-                .Include(u => u.ValidationInfo)
-                .Load();
+            List<User> userList;
+            try
+            {
+                userList = _context.Users
+                    .Include(u => u.Office)
+                    .Include(u => u.ValidationInfo)
+                    .ToList();
+            }
+            catch
+            {
+                userList = _context.Users.ToList();
+            }
 
             Users.Clear();
-            foreach (var user in _context.Users.Local)
+            foreach (var user in userList)
                 Users.Add(user);
 
             _usersView = CollectionViewSource.GetDefaultView(Users);
             _usersView.Filter = FilterUsers;
+            _usersView.Refresh();
 
-            var offcs = _context.Offices.OrderBy(d => d.Name).ToList();
-            Offices.Clear();
-            foreach (var d in offcs) Offices.Add(d);
+            try
+            {
+                var offcs = _context.Offices.OrderBy(d => d.Name).ToList();
+                Offices.Clear();
+                foreach (var d in offcs) Offices.Add(d);
+            }
+            catch { }
 
-            var roles = _context.DepartmentRoles.OrderBy(r => r.Name).ToList();
-            _allRoles.Clear();
-            foreach (var r in roles) _allRoles.Add(r);
+            try
+            {
+                var roles = _context.DepartmentRoles.OrderBy(r => r.Name).ToList();
+                _allRoles.Clear();
+                foreach (var r in roles) _allRoles.Add(r);
+            }
+            catch { }
 
             RefreshFilteredRoles();
             LoadValidateUsers();
         }
-         catch 
+        catch (Exception ex)
         {
-
+            System.Diagnostics.Debug.WriteLine($"[UserManagementViewModel] LoadData Error: {ex.Message}");
         }
     }
 
@@ -262,8 +284,9 @@ public class UserManagementViewModel : ViewModelBase
         if (obj is User user)
         {
             if (string.IsNullOrWhiteSpace(SearchText)) return true;
-            return user.Name.Contains(SearchText, StringComparison.OrdinalIgnoreCase) ||
-                   user.Role.Contains(SearchText, StringComparison.OrdinalIgnoreCase);
+            return (user.Name != null && user.Name.Contains(SearchText, StringComparison.OrdinalIgnoreCase)) ||
+                   (user.Email != null && user.Email.Contains(SearchText, StringComparison.OrdinalIgnoreCase)) ||
+                   (user.Role != null && user.Role.Contains(SearchText, StringComparison.OrdinalIgnoreCase));
         }
         return false;
     }
@@ -292,18 +315,9 @@ public class UserManagementViewModel : ViewModelBase
     private void RefreshProfilePhoto()
     {
         SelectedUserProfilePhotoSource = null;
-        if (SelectedUser != null && !string.IsNullOrEmpty(SelectedUser.ProfilePhoto) && File.Exists(SelectedUser.ProfilePhoto))
+        if (!string.IsNullOrEmpty(SelectedUser.ProfilePhoto))
         {
-            try
-            {
-                var bitmap = new BitmapImage();
-                bitmap.BeginInit();
-                bitmap.CacheOption = BitmapCacheOption.OnLoad; // allows file to be released
-                bitmap.UriSource = new Uri(SelectedUser.ProfilePhoto, UriKind.Absolute);
-                bitmap.EndInit();
-                SelectedUserProfilePhotoSource = bitmap;
-            }
-            catch { /* Ignore load errors */ }
+            SelectedUserProfilePhotoSource = ImageHelper.LoadBitmapSafe(SelectedUser.ProfilePhoto);
         }
     }
 
@@ -314,15 +328,18 @@ public class UserManagementViewModel : ViewModelBase
         var openFileDialog = new OpenFileDialog
         {
             Title = "Select Profile Photo",
-            Filter = "Image Files (*.jpg;*.jpeg;*.png;*.bmp)|*.jpg;*.jpeg;*.png;*.bmp|All files (*.*)|*.*"
+            Filter = ImageHelper.OpenImageFileDialogFilter
         };
 
         if (openFileDialog.ShowDialog() == true)
         {
             try
             {
-                string appDir = AppDomain.CurrentDomain.BaseDirectory;
-                string photosDir = Path.Combine(appDir, "ProfilePhotos");
+                string appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+                string photosDir = !string.IsNullOrEmpty(appData)
+                    ? Path.Combine(appData, "GoodGovernanceApp", "ProfilePhotos")
+                    : Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "ProfilePhotos");
+
                 if (!Directory.Exists(photosDir)) Directory.CreateDirectory(photosDir);
 
                 string ext = Path.GetExtension(openFileDialog.FileName);
@@ -353,11 +370,55 @@ public class UserManagementViewModel : ViewModelBase
     private void ExecuteEdit(object? parameter) => IsEditing = true;
 
     private bool CanExecuteSave(object? parameter)
-        => IsEditing && !string.IsNullOrWhiteSpace(SelectedUser.Name) && !string.IsNullOrWhiteSpace(SelectedUser.Role);
+        => IsEditing && !string.IsNullOrWhiteSpace(SelectedUser.Name) && !string.IsNullOrWhiteSpace(SelectedUser.Email) && !string.IsNullOrWhiteSpace(SelectedUser.Role);
 
     private void ExecuteSave(object? parameter)
     {
-        if (SelectedUser.Id == 0)
+        if (SelectedUser == null) return;
+
+        string trimmedName = SelectedUser.Name?.Trim() ?? string.Empty;
+        string trimmedEmail = SelectedUser.Email?.Trim() ?? string.Empty;
+        string role = SelectedUser.Role?.Trim() ?? string.Empty;
+
+        if (string.IsNullOrWhiteSpace(trimmedName))
+        {
+            System.Windows.MessageBox.Show("Username is required.", "Validation Error", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Warning);
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(trimmedEmail))
+        {
+            System.Windows.MessageBox.Show("Email is required.", "Validation Error", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Warning);
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(role))
+        {
+            System.Windows.MessageBox.Show("Role is required.", "Validation Error", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Warning);
+            return;
+        }
+
+        SelectedUser.Name = trimmedName;
+        SelectedUser.Email = trimmedEmail;
+        SelectedUser.Role = role;
+
+        // Ensure OfficeId is null if set to 0 or invalid
+        if (SelectedUser.OfficeId.HasValue && SelectedUser.OfficeId.Value <= 0)
+        {
+            SelectedUser.OfficeId = null;
+        }
+
+        // Check for duplicate email across other users
+        bool duplicateEmail = _context.Users.Any(u => u.Email.ToLower() == trimmedEmail.ToLower() && u.Id != SelectedUser.Id);
+        if (duplicateEmail)
+        {
+            System.Windows.MessageBox.Show($"The email '{trimmedEmail}' is already registered to another user. Please use a unique email address.", "Duplicate Email", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Warning);
+            return;
+        }
+
+        bool isNewUser = SelectedUser.Id == 0;
+
+        if (isNewUser)
         {
             // ── New user ──────────────────────────────────────────────────
             string plainPw = string.IsNullOrWhiteSpace(NewPasswordInput)
@@ -365,6 +426,12 @@ public class UserManagementViewModel : ViewModelBase
                 : NewPasswordInput;
 
             SelectedUser.Password = PasswordHasher.HashPassword(plainPw);
+            SelectedUser.CreatedAt = DateTime.UtcNow;
+            SelectedUser.UpdatedAt = DateTime.UtcNow;
+
+            if (SelectedUser.SyncId == Guid.Empty)
+                SelectedUser.SyncId = Guid.NewGuid();
+
             _context.Users.Add(SelectedUser);
         }
         else
@@ -372,12 +439,51 @@ public class UserManagementViewModel : ViewModelBase
             // ── Existing user — only update password if something was typed ─
             if (!string.IsNullOrWhiteSpace(NewPasswordInput))
                 SelectedUser.Password = PasswordHasher.HashPassword(NewPasswordInput);
+
+            SelectedUser.UpdatedAt = DateTime.UtcNow;
         }
 
-        _context.SaveChanges();
-        NewPasswordInput = string.Empty;   // clear backing field (box is cleared by code-behind)
-        IsEditing = false;
-        LoadData();
+        try
+        {
+            _context.SaveChanges();
+            NewPasswordInput = string.Empty;   // clear backing field (box is cleared by code-behind)
+            IsEditing = false;
+            LoadData();
+
+            // Push changes to cloud immediately in background if online
+            _ = Task.Run(async () =>
+            {
+                try { if (_syncService != null) await _syncService.SyncNowAsync(); }
+                catch { }
+            });
+
+            System.Windows.MessageBox.Show(
+                isNewUser ? "User added successfully!" : "User updated successfully!",
+                "Success",
+                System.Windows.MessageBoxButton.OK,
+                System.Windows.MessageBoxImage.Information);
+        }
+        catch (Exception ex)
+        {
+            // Revert / detach invalid changes from the ChangeTracker so subsequent operations succeed
+            foreach (var entry in _context.ChangeTracker.Entries().Where(e => e.State != EntityState.Unchanged).ToList())
+            {
+                if (entry.State == EntityState.Added)
+                    entry.State = EntityState.Detached;
+                else
+                    entry.Reload();
+            }
+
+            string errorDetail = ex.InnerException != null ? ex.InnerException.Message : ex.Message;
+            if (ex.InnerException?.InnerException != null)
+                errorDetail += $"\n{ex.InnerException.InnerException.Message}";
+
+            System.Windows.MessageBox.Show(
+                $"Failed to save user.\n\nDetails: {errorDetail}",
+                "Save Error",
+                System.Windows.MessageBoxButton.OK,
+                System.Windows.MessageBoxImage.Error);
+        }
     }
 
     private bool CanExecuteDelete(object? parameter) => SelectedUser.Id != 0 && !IsEditing;
@@ -396,8 +502,13 @@ public class UserManagementViewModel : ViewModelBase
             catch (DbUpdateException)
             {
                 // Revert the deletion state in the EF tracker so the app doesn't crash on next action
-                foreach (var entry in _context.ChangeTracker.Entries().Where(e => e.State != EntityState.Unchanged))
-                    entry.State = EntityState.Unchanged;
+                foreach (var entry in _context.ChangeTracker.Entries().Where(e => e.State != EntityState.Unchanged).ToList())
+                {
+                    if (entry.State == EntityState.Added)
+                        entry.State = EntityState.Detached;
+                    else
+                        entry.Reload();
+                }
 
                 System.Windows.MessageBox.Show(
                     "This user cannot be deleted because they have associated records (e.g., budgets, requests) in the system.\n\n" +
@@ -414,7 +525,12 @@ public class UserManagementViewModel : ViewModelBase
         NewPasswordInput = string.Empty;
         IsEditing = false;
         SelectedUser = new User();
-        foreach (var entry in _context.ChangeTracker.Entries().Where(e => e.State != EntityState.Unchanged))
-            entry.State = EntityState.Unchanged;
+        foreach (var entry in _context.ChangeTracker.Entries().Where(e => e.State != EntityState.Unchanged).ToList())
+        {
+            if (entry.State == EntityState.Added)
+                entry.State = EntityState.Detached;
+            else
+                entry.Reload();
+        }
     }
 }

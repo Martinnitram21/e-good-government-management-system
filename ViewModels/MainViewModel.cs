@@ -1,4 +1,5 @@
 using GoodGovernanceApp.Data;
+using GoodGovernanceApp.Utilities;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Win32;
 using Org.BouncyCastle.Utilities.Net;
@@ -532,27 +533,12 @@ public class MainViewModel : ViewModelBase
         {
             await Task.Run(() =>
             {
-                var imagesDir = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Assets", "Images");
-                if (System.IO.Directory.Exists(imagesDir))
-                {
-                    var file = System.IO.Directory.EnumerateFiles(imagesDir, "*system_profile*.*").FirstOrDefault();
-                    if (file == null) 
-                    {
-                        file = System.IO.Directory.EnumerateFiles(imagesDir, "*system*.*").FirstOrDefault();
-                    }
+                var img = ImageHelper.LoadBitmapSafe("system_profile.png")
+                       ?? ImageHelper.LoadBitmapSafe("pack://application:,,,/GoodGovernanceApp;component/Assets/Images/system_profile.png");
 
-                    if (file != null)
-                    {
-                        Application.Current.Dispatcher.Invoke(() =>
-                        {
-                            var bitmap = new BitmapImage();
-                            bitmap.BeginInit();
-                            bitmap.CacheOption = BitmapCacheOption.OnLoad;
-                            bitmap.UriSource = new Uri(file, UriKind.Absolute);
-                            bitmap.EndInit();
-                            SystemPhotoSource = bitmap;
-                        });
-                    }
+                if (img != null)
+                {
+                    Application.Current.Dispatcher.Invoke(() => SystemPhotoSource = img);
                 }
             });
         }
@@ -566,22 +552,12 @@ public class MainViewModel : ViewModelBase
         {
             await Task.Run(() =>
             {
-                var imagesDir = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Assets", "Images");
-                if (System.IO.Directory.Exists(imagesDir))
+                var img = ImageHelper.LoadBitmapSafe("copyright.png")
+                       ?? ImageHelper.LoadBitmapSafe("pack://application:,,,/GoodGovernanceApp;component/Assets/Images/copyright.png");
+
+                if (img != null)
                 {
-                    var file = System.IO.Directory.EnumerateFiles(imagesDir, "*copyright*.*").FirstOrDefault();
-                    if (file != null)
-                    {
-                        Application.Current.Dispatcher.Invoke(() =>
-                        {
-                            var bitmap = new BitmapImage();
-                            bitmap.BeginInit();
-                            bitmap.CacheOption = BitmapCacheOption.OnLoad;
-                            bitmap.UriSource = new Uri(file, UriKind.Absolute);
-                            bitmap.EndInit();
-                            CopyrightPhotoSource = bitmap;
-                        });
-                    }
+                    Application.Current.Dispatcher.Invoke(() => CopyrightPhotoSource = img);
                 }
             });
         }
@@ -592,6 +568,7 @@ public class MainViewModel : ViewModelBase
     {
         try
         {
+            string logoAddressFromDb = string.Empty;
             string query = "SELECT GoveName, LogoAddress, Address FROM goveprofile LIMIT 1;";
             var dataTable = await _dbHelper.ExecuteQueryAsync(query);
 
@@ -600,39 +577,30 @@ public class MainViewModel : ViewModelBase
                 var row = dataTable.Rows[0];
                 string govName = row["GoveName"]?.ToString() ?? "";
                 string addr = row["Address"]?.ToString() ?? "";
-                // Note: We ignore LogoAddress from DB now.
+                logoAddressFromDb = row["LogoAddress"]?.ToString() ?? "";
             }
 
-            // Load logo from Assets/Images instead
             await Task.Run(() =>
             {
-                var imagesDir = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Assets", "Images");
-                if (System.IO.Directory.Exists(imagesDir))
-                {
-                    var file = System.IO.Directory.EnumerateFiles(imagesDir, "*logo*.*").FirstOrDefault();
-                    if (file == null) 
-                    {
-                        file = System.IO.Directory.EnumerateFiles(imagesDir, "*gov*.*").FirstOrDefault();
-                    }
+                BitmapImage? img = null;
 
-                    if (file != null)
-                    {
-                        Application.Current.Dispatcher.Invoke(() =>
-                        {
-                            var bi = new BitmapImage();
-                            bi.BeginInit();
-                            bi.CacheOption = BitmapCacheOption.OnLoad;
-                            bi.UriSource = new Uri(file, UriKind.Absolute);
-                            bi.EndInit();
-                            GovPhotoSource = bi;
-                        });
-                    }
+                if (!string.IsNullOrWhiteSpace(logoAddressFromDb))
+                    img = ImageHelper.LoadBitmapSafe(logoAddressFromDb);
+
+                if (img == null)
+                    img = ImageHelper.LoadBitmapSafe("company_profile_logo.jpg")
+                       ?? ImageHelper.LoadBitmapSafe("logo.png")
+                       ?? ImageHelper.LoadBitmapSafe("pack://application:,,,/GoodGovernanceApp;component/Assets/Images/company_profile_logo.jpg");
+
+                if (img != null)
+                {
+                    Application.Current.Dispatcher.Invoke(() => GovPhotoSource = img);
                 }
             });
         }
-        catch (Exception ex) // ✅ CHANGE THIS TOO — never silently swallow errors
+        catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"[MethodName] Error: {ex.Message}");
+            System.Diagnostics.Debug.WriteLine($"[MainViewModel] LoadGovProfileAsync Error: {ex.Message}");
         }
     }
 

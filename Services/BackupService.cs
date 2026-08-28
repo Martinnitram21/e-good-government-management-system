@@ -2,55 +2,84 @@ using System;
 using System.Diagnostics;
 using System.IO;
 using System.Threading.Tasks;
+using Microsoft.Data.Sqlite;
 
 namespace GoodGovernanceApp.Services;
 
 /// <summary>
-/// Wraps mysqldump to create database backups.
-///
-/// ── Backup Type Explanation ──────────────────────────────────────────────────
-///
-/// FULL BACKUP
-///   mysqldump --single-transaction --routines --triggers --events
-///   Dumps schema + all data. Required as a baseline for the other types.
-///   File prefix: FullBackup_
-///
-/// DIFFERENTIAL BACKUP
-///   mysqldump --single-transaction --no-create-info
-///   Dumps ONLY data rows (no CREATE TABLE statements), representing changes
-///   since the last Full backup (schema is assumed unchanged).
-///   To restore: apply Full backup first, then replay this file.
-///   File prefix: DiffBackup_
-///   Note: For true differential you need MySQL binary logs; this is a practical
-///   approximation for application-level scheduling.
-///
-/// INCREMENTAL BACKUP
-///   Same as Differential but captures data since the last backup of any type.
-///   In production, enable binary logging (log_bin=ON in my.ini) and use
-///   mysqlbinlog to replay changes between specific positions/time ranges.
-///   File prefix: IncBackup_
-///
-/// ─────────────────────────────────────────────────────────────────────────────
+/// Provides automated and manual backups for SQLite and MySQL databases.
 /// </summary>
 public class BackupService
 {
     public string MySqlDumpPath { get; set; } = "mysqldump";
 
+    public string SqliteDbPath { get; set; } = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+        "GoodGovernanceApp", "ggms.db");
+
     // ── Public entry points ───────────────────────────────────────────────────
 
-    public Task<bool> CreateFullBackupAsync(string connectionString, string backupDirectory)
-        => ExecuteBackupAsync(connectionString, backupDirectory, "FullBackup",
-            extraArgs: "--single-transaction --routines --triggers --events");
+    public async Task<bool> CreateFullBackupAsync(string connectionString, string backupDirectory)
+    {
+        if (File.Exists(SqliteDbPath) || string.IsNullOrWhiteSpace(connectionString) || connectionString.Contains(".db", StringComparison.OrdinalIgnoreCase))
+        {
+            return await CreateSqliteBackupAsync(backupDirectory, "FullBackup");
+        }
+        return await ExecuteBackupAsync(connectionString, backupDirectory, "FullBackup", extraArgs: "--single-transaction --routines --triggers --events");
+    }
 
-    public Task<bool> CreateDifferentialBackupAsync(string connectionString, string backupDirectory)
-        // --no-create-info = data only; mirrors "what changed" since last full backup.
-        => ExecuteBackupAsync(connectionString, backupDirectory, "DiffBackup",
-            extraArgs: "--single-transaction --no-create-info");
+    public async Task<bool> CreateDifferentialBackupAsync(string connectionString, string backupDirectory)
+    {
+        if (File.Exists(SqliteDbPath) || string.IsNullOrWhiteSpace(connectionString) || connectionString.Contains(".db", StringComparison.OrdinalIgnoreCase))
+        {
+            return await CreateSqliteBackupAsync(backupDirectory, "DiffBackup");
+        }
+        return await ExecuteBackupAsync(connectionString, backupDirectory, "DiffBackup", extraArgs: "--single-transaction --no-create-info");
+    }
 
-    public Task<bool> CreateIncrementalBackupAsync(string connectionString, string backupDirectory)
-        // Same technique as differential for application-level incremental tracking.
-        => ExecuteBackupAsync(connectionString, backupDirectory, "IncBackup",
-            extraArgs: "--single-transaction --no-create-info");
+    public async Task<bool> CreateIncrementalBackupAsync(string connectionString, string backupDirectory)
+    {
+        if (File.Exists(SqliteDbPath) || string.IsNullOrWhiteSpace(connectionString) || connectionString.Contains(".db", StringComparison.OrdinalIgnoreCase))
+        {
+            return await CreateSqliteBackupAsync(backupDirectory, "IncBackup");
+        }
+        return await ExecuteBackupAsync(connectionString, backupDirectory, "IncBackup", extraArgs: "--single-transaction --no-create-info");
+    }
+
+    // ── SQLite Backup (Safe Online Snapshot) ───────────────────────────────────
+    public async Task<bool> CreateSqliteBackupAsync(string backupDirectory, string prefix = "FullBackup")
+    {
+        try
+        {
+            if (!Directory.Exists(backupDirectory))
+                Directory.CreateDirectory(backupDirectory);
+
+            if (!File.Exists(SqliteDbPath))
+            {
+                LogError(backupDirectory, $"SQLite database file not found at: {SqliteDbPath}");
+                return false;
+            }
+
+            string timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
+            string fileName = $"{prefix}_ggms_{timestamp}.db";
+            string destFile = Path.Combine(backupDirectory, fileName);
+
+            using (var sourceConn = new SqliteConnection($"Data Source={SqliteDbPath}"))
+            using (var destConn = new SqliteConnection($"Data Source={destFile}"))
+            {
+                await sourceConn.OpenAsync();
+                await destConn.OpenAsync();
+                sourceConn.BackupDatabase(destConn);
+            }
+
+            return true;
+        }
+        catch (Exception ex)
+        {
+            LogError(backupDirectory, $"SQLite backup error: {ex.Message}");
+            return false;
+        }
+    }
 
     // ── Core execution ────────────────────────────────────────────────────────
 

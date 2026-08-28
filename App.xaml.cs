@@ -20,13 +20,29 @@ public partial class App : Application
     {
         this.DispatcherUnhandledException += (s, e) =>
         {
-            MessageBox.Show($"UI EXCEPTION:\n\n{e.Exception.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            string msg = e.Exception.Message;
+            var inner = e.Exception.InnerException;
+            while (inner != null)
+            {
+                msg += $"\n\nDetails: {inner.Message}";
+                inner = inner.InnerException;
+            }
+            MessageBox.Show($"UI EXCEPTION:\n\n{msg}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             e.Handled = true;
         };
         AppDomain.CurrentDomain.UnhandledException += (s, e) =>
         {
             if (e.ExceptionObject is Exception ex)
-                MessageBox.Show($"FATAL EXCEPTION:\n\n{ex.Message}", "Fatal Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            {
+                string msg = ex.Message;
+                var inner = ex.InnerException;
+                while (inner != null)
+                {
+                    msg += $"\n\nDetails: {inner.Message}";
+                    inner = inner.InnerException;
+                }
+                MessageBox.Show($"FATAL EXCEPTION:\n\n{msg}", "Fatal Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
         };
 
         var culture = new CultureInfo("en-PH");
@@ -39,21 +55,55 @@ public partial class App : Application
 
         try
         {
-            string appDataFolder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "GoodGovernanceApp");
+            string appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+            string appDataFolder = !string.IsNullOrEmpty(appData) ? Path.Combine(appData, "GoodGovernanceApp") : Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Data");
             Directory.CreateDirectory(appDataFolder);
             string appDataSettingsPath = Path.Combine(appDataFolder, "appsettings.json");
 
             if (!File.Exists(appDataSettingsPath))
             {
                 // When using PublishSingleFile, BaseDirectory is a temp folder. We need the actual .exe path.
-                string exeDir = Path.GetDirectoryName(System.Diagnostics.Process.GetCurrentProcess().MainModule?.FileName) ?? AppDomain.CurrentDomain.BaseDirectory;
-                string exeSettingsPath = Path.Combine(exeDir, "appsettings.json");
-                string baseSettingsPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "appsettings.json");
+                string exePath = Environment.ProcessPath ?? "";
+                string exeDir = !string.IsNullOrEmpty(exePath) ? (Path.GetDirectoryName(exePath) ?? AppDomain.CurrentDomain.BaseDirectory) : AppDomain.CurrentDomain.BaseDirectory;
+                
+                string exeSettingsPath = !string.IsNullOrEmpty(exeDir) ? Path.Combine(exeDir, "appsettings.json") : "";
+                string baseSettingsPath = !string.IsNullOrEmpty(AppDomain.CurrentDomain.BaseDirectory) ? Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "appsettings.json") : "";
 
-                if (File.Exists(exeSettingsPath))
-                    File.Copy(exeSettingsPath, appDataSettingsPath);
-                else if (File.Exists(baseSettingsPath))
-                    File.Copy(baseSettingsPath, appDataSettingsPath);
+                if (!string.IsNullOrEmpty(exeSettingsPath) && File.Exists(exeSettingsPath))
+                {
+                    File.Copy(exeSettingsPath, appDataSettingsPath, true);
+                }
+                else if (!string.IsNullOrEmpty(baseSettingsPath) && File.Exists(baseSettingsPath))
+                {
+                    File.Copy(baseSettingsPath, appDataSettingsPath, true);
+                }
+                else
+                {
+                    // Fallback: create default appsettings.json automatically
+                    const string defaultJson = @"{
+  ""ConnectionStrings"": {
+    ""RemoteConnection"": ""Server=194.59.164.58;Port=3306;Database=u621755393_ggms;User=u621755393_ggms_user;Password=Ggms@2026;AllowZeroDateTime=True;ConvertZeroDateTime=True;"",
+    ""LocalConnection"": ""Server=127.0.0.1;Port=3306;Database=govern;User=root;Password=root;SslMode=None;AllowPublicKeyRetrieval=True;""
+  },
+  ""CrsConnection"": {
+    ""Server"": ""svr12367.hstgr.io"",
+    ""Port"": ""3306"",
+    ""Database"": ""u621755393_crs"",
+    ""User"": ""u621755393_crs_user"",
+    ""Password"": ""Crs@2026""
+  },
+  ""SmtpConnection"": {
+    ""EmailAddress"": ""bryanluy822@gmail.com"",
+    ""AppPassword"": ""afyyknunzimihtrv""
+  },
+  ""AppSettings"": {
+    ""DatabaseMode"": ""Remote"",
+    ""UseRemoteDatabase"": false,
+    ""MySqlDumpPath"": ""mysqldump""
+  }
+}";
+                    File.WriteAllText(appDataSettingsPath, defaultJson);
+                }
             }
 
             AppHost = Host.CreateDefaultBuilder()

@@ -7,6 +7,7 @@ using System.Windows.Media.Imaging;
 using Microsoft.Win32;
 using Microsoft.Data.Sqlite;
 using GoodGovernanceApp.Data;
+using GoodGovernanceApp.Utilities;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace GoodGovernanceApp.ViewModels;
@@ -91,8 +92,8 @@ public class SystemsApplicationProfileViewModel : ViewModelBase
     {
         var dialog = new OpenFileDialog
         {
-            Title = "Select Logo",
-            Filter = "Image Files (*.png;*.jpg;*.jpeg)|*.png;*.jpg;*.jpeg"
+            Title = "Select Photo",
+            Filter = ImageHelper.OpenImageFileDialogFilter
         };
 
         if (dialog.ShowDialog() == true)
@@ -121,7 +122,7 @@ public class SystemsApplicationProfileViewModel : ViewModelBase
                     newPath = Path.Combine(appDataFolder, $"{name}_{Guid.NewGuid().ToString().Substring(0, 8)}{ext}");
                 }
 
-                File.Copy(selectedPath, newPath);
+                File.Copy(selectedPath, newPath, overwrite: true);
 
                 // ✅ Save absolute path — no more relative path issues
                 PhotoAddress = newPath;
@@ -137,30 +138,7 @@ public class SystemsApplicationProfileViewModel : ViewModelBase
 
     private void LoadPhoto(string path)
     {
-        // Resolve relative path if needed
-        if (!Path.IsPathRooted(path))
-            path = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, path);
-
-        if (!string.IsNullOrWhiteSpace(path) && File.Exists(path))
-        {
-            try
-            {
-                var bi = new BitmapImage();
-                bi.BeginInit();
-                bi.CacheOption = BitmapCacheOption.OnLoad;
-                bi.UriSource = new Uri(path, UriKind.Absolute);
-                bi.EndInit();
-                PhotoPreview = bi;
-            }
-            catch
-            {
-                PhotoPreview = null;
-            }
-        }
-        else
-        {
-            PhotoPreview = null;
-        }
+        PhotoPreview = ImageHelper.LoadBitmapSafe(path, "pack://application:,,,/GoodGovernanceApp;component/Assets/Images/system_profile.png");
     }
 
     private async Task ExecuteSaveAsync()

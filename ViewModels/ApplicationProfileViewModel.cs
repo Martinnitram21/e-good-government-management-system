@@ -8,6 +8,7 @@ using Microsoft.Win32;
 using Microsoft.Data.Sqlite;
 using GoodGovernanceApp.Data;
 using GoodGovernanceApp.Models;
+using GoodGovernanceApp.Utilities;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace GoodGovernanceApp.ViewModels;
@@ -94,7 +95,7 @@ public class ApplicationProfileViewModel : ViewModelBase
         var dialog = new OpenFileDialog
         {
             Title = "Select Logo",
-            Filter = "Image Files (*.png;*.jpg;*.jpeg)|*.png;*.jpg;*.jpeg"
+            Filter = ImageHelper.OpenImageFileDialogFilter
         };
 
         if (dialog.ShowDialog() == true)
@@ -123,10 +124,10 @@ public class ApplicationProfileViewModel : ViewModelBase
                     newPath = Path.Combine(appDataFolder, $"{name}_{Guid.NewGuid().ToString().Substring(0, 8)}{ext}");
                 }
 
-                File.Copy(selectedPath, newPath);
+                File.Copy(selectedPath, newPath, overwrite: true);
 
                 // ✅ Save absolute path — no more relative path issues
-                LogoAddress = newPath; // or PhotoAddress for SystemsApplicationProfile
+                LogoAddress = newPath;
                 LoadLogoImage(newPath);
             }
             catch (Exception ex)
@@ -139,30 +140,7 @@ public class ApplicationProfileViewModel : ViewModelBase
 
     private void LoadLogoImage(string path)
     {
-        // Resolve relative path if needed
-        if (!Path.IsPathRooted(path))
-            path = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, path);
-
-        if (!string.IsNullOrWhiteSpace(path) && File.Exists(path))
-        {
-            try
-            {
-                var bi = new BitmapImage();
-                bi.BeginInit();
-                bi.CacheOption = BitmapCacheOption.OnLoad;
-                bi.UriSource = new Uri(path, UriKind.Absolute);
-                bi.EndInit();
-                LogoPreview = bi;
-            }
-            catch
-            {
-                LogoPreview = null;
-            }
-        }
-        else
-        {
-            LogoPreview = null;
-        }
+        LogoPreview = ImageHelper.LoadBitmapSafe(path, "pack://application:,,,/GoodGovernanceApp;component/Assets/Images/company_profile_logo.jpg");
     }
 
     private async Task ExecuteSaveAsync()
