@@ -194,62 +194,6 @@
                 </StackPanel>
             </materialDesign:Card>
 
-            <!-- CRS Database Connection -->
-            <materialDesign:Card Grid.Row="5" Margin="0 0 0 16" Padding="24">
-                <StackPanel>
-                    <StackPanel Orientation="Horizontal" Margin="0 0 0 16">
-                        <materialDesign:PackIcon Kind="DatabaseSearch" Width="22" Height="22" 
-                                                 VerticalAlignment="Center" Margin="0 0 8 0"
-                                                 Foreground="#D90000"/>
-                        <TextBlock Foreground="#000000" Text="CRS Database Connection (Read Only)" FontSize="18" FontWeight="SemiBold" VerticalAlignment="Center"/>
-                    </StackPanel>
-
-                    <TextBlock Text="⚠ CRS is read-only for GGMS. Used for constituent lookup." 
-                               FontSize="12" FontStyle="Italic"
-                               Foreground="#000000" Margin="0 0 0 16"/>
-
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="3*"/>
-                            <ColumnDefinition Width="16"/>
-                            <ColumnDefinition Width="1*"/>
-                        </Grid.ColumnDefinitions>
-                        <TextBox Grid.Column="0" materialDesign:HintAssist.Hint="CRS Server / IP"
-                                 Text="{Binding CrsServer, UpdateSourceTrigger=PropertyChanged}"
-                                 Style="{StaticResource MaterialDesignFloatingHintTextBox}"
-                                 Foreground="#000000"
-                                 Margin="0 0 0 12"/>
-                        <TextBox Grid.Column="2" materialDesign:HintAssist.Hint="Port"
-                                 Text="{Binding CrsPort, UpdateSourceTrigger=PropertyChanged}"
-                                 Style="{StaticResource MaterialDesignFloatingHintTextBox}"
-                                 Foreground="#000000"
-                                 Margin="0 0 0 12"/>
-                    </Grid>
-
-                    <TextBox materialDesign:HintAssist.Hint="CRS Database Name"
-                             Text="{Binding CrsDatabase, UpdateSourceTrigger=PropertyChanged}"
-                             Style="{StaticResource MaterialDesignFloatingHintTextBox}"
-                             Foreground="#000000"
-                             Margin="0 0 0 12"/>
-
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="16"/>
-                            <ColumnDefinition Width="*"/>
-                        </Grid.ColumnDefinitions>
-                        <TextBox Grid.Column="0" materialDesign:HintAssist.Hint="CRS Username"
-                                 Text="{Binding CrsUser, UpdateSourceTrigger=PropertyChanged}"
-                                 Style="{StaticResource MaterialDesignFloatingHintTextBox}"
-                                 Foreground="#000000"/>
-                        <TextBox Grid.Column="2" materialDesign:HintAssist.Hint="CRS Password"
-                                 Text="{Binding CrsPassword, UpdateSourceTrigger=PropertyChanged}"
-                                 Foreground="#000000"
-                                 Style="{StaticResource MaterialDesignFloatingHintTextBox}"/>
-                    </Grid>
-                </StackPanel>
-            </materialDesign:Card>
-
             <!-- Test + Save -->
         <materialDesign:Card Grid.Row="7" Margin="0 0 0 16" Padding="24">
                 <StackPanel>
@@ -273,9 +217,7 @@
                                Foreground="#000000"/>
                     <TextBlock Text="{Binding GgmsTestResult}" FontSize="13" FontWeight="Medium" Margin="0 0 0 4"
                                Foreground="#000000"/>
-                    <TextBlock Text="{Binding NetworkTestResult}" FontSize="13" FontWeight="Medium" Margin="0 0 0 4"
-                               Foreground="#000000"/>
-                    <TextBlock Text="{Binding CrsTestResult}" FontSize="13" FontWeight="Medium" Margin="0 0 0 16"
+                    <TextBlock Text="{Binding NetworkTestResult}" FontSize="13" FontWeight="Medium" Margin="0 0 0 16"
                                Foreground="#000000"/>
 
                     <Button Content="💾 SAVE SETTINGS (REQUIRES RESTART)"
