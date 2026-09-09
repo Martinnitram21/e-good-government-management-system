@@ -29,8 +29,8 @@
                     Style="{StaticResource MaterialDesignTabControl}"
                     materialDesign:ColorZoneAssist.Mode="PrimaryMid">
 
-            <!-- ── Tab 1: Cloud Sync ─────────────────────────────────────── -->
-            <TabItem Header="☁ CLOUD SYNC">
+            <!-- ── Tab 1: Online ─────────────────────────────────────── -->
+            <TabItem Header="☁ ONLINE">
                 <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="0 8 0 0">
                     <materialDesign:Card Padding="20">
                         <StackPanel>
@@ -38,7 +38,7 @@
                                 <materialDesign:PackIcon Kind="CloudSync" Width="22" Height="22"
                                                          VerticalAlignment="Center" Margin="0 0 8 0"
                                                          Foreground="#000000"/>
-                                <TextBlock Text="Cloud Sync Database (Hostinger)" FontSize="16" FontWeight="SemiBold" VerticalAlignment="Center" Foreground="#000000"/>
+                                <TextBlock Text="Online Database (Hostinger)" FontSize="16" FontWeight="SemiBold" VerticalAlignment="Center" Foreground="#000000"/>
                             </StackPanel>
 
                             <Grid>
@@ -82,7 +82,7 @@
                             </Grid>
 
                             <StackPanel Orientation="Horizontal" Margin="0 16 0 8">
-                                <Button Content="🔌 TEST CLOUD CONNECTION"
+                                <Button Content="🔌 TEST ONLINE CONNECTION"
                                         Command="{Binding TestCloudCommand}"
                                         Style="{StaticResource MaterialDesignOutlinedButton}"
                                         Margin="0 0 12 0"/>
@@ -169,77 +169,7 @@
                 </ScrollViewer>
             </TabItem>
 
-            <!-- ── Tab 3: CRS (Read Only) ────────────────────────────────── -->
-            <TabItem Header="🗄 CRS (READ ONLY)">
-                <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="0 8 0 0">
-                    <materialDesign:Card Padding="20">
-                        <StackPanel>
-                            <StackPanel Orientation="Horizontal" Margin="0 0 0 12">
-                                <materialDesign:PackIcon Kind="DatabaseSearch" Width="22" Height="22"
-                                                         VerticalAlignment="Center" Margin="0 0 8 0"
-                                                         Foreground="#D90000"/>
-                                <TextBlock Text="CRS Database Connection (Read Only)" FontSize="16" FontWeight="SemiBold" VerticalAlignment="Center" Foreground="#000000"/>
-                            </StackPanel>
-
-                            <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="3*"/>
-                                    <ColumnDefinition Width="16"/>
-                                    <ColumnDefinition Width="1*"/>
-                                </Grid.ColumnDefinitions>
-                                <TextBox Grid.Column="0" materialDesign:HintAssist.Hint="CRS Server / IP"
-                                         Text="{Binding CrsServer, UpdateSourceTrigger=PropertyChanged}"
-                                         Style="{StaticResource MaterialDesignFloatingHintTextBox}"
-                                         Foreground="#000000"
-                                         Margin="0 0 0 12"/>
-                                <TextBox Grid.Column="2" materialDesign:HintAssist.Hint="Port"
-                                         Text="{Binding CrsPort, UpdateSourceTrigger=PropertyChanged}"
-                                         Style="{StaticResource MaterialDesignFloatingHintTextBox}"
-                                         Foreground="#000000"
-                                         Margin="0 0 0 12"/>
-                            </Grid>
-
-                            <TextBox materialDesign:HintAssist.Hint="CRS Database Name"
-                                     Text="{Binding CrsDatabase, UpdateSourceTrigger=PropertyChanged}"
-                                     Style="{StaticResource MaterialDesignFloatingHintTextBox}"
-                                     Foreground="#000000"
-                                     Margin="0 0 0 12"/>
-
-                            <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="16"/>
-                                    <ColumnDefinition Width="*"/>
-                                </Grid.ColumnDefinitions>
-                                <TextBox Grid.Column="0" materialDesign:HintAssist.Hint="CRS Username"
-                                         Text="{Binding CrsUser, UpdateSourceTrigger=PropertyChanged}"
-                                         Style="{StaticResource MaterialDesignFloatingHintTextBox}"
-                                         Foreground="#000000"/>
-                                <TextBox Grid.Column="2" materialDesign:HintAssist.Hint="CRS Password"
-                                         Text="{Binding CrsPassword, UpdateSourceTrigger=PropertyChanged}"
-                                         Foreground="#000000"
-                                         Style="{StaticResource MaterialDesignFloatingHintTextBox}"/>
-                            </Grid>
-
-                            <StackPanel Orientation="Horizontal" Margin="0 16 0 8">
-                                <Button Content="🔌 TEST CRS CONNECTION"
-                                        Command="{Binding TestCrsCommand}"
-                                        Style="{StaticResource MaterialDesignOutlinedButton}"
-                                        Margin="0 0 12 0"/>
-                                <ProgressBar IsIndeterminate="True" Width="20" Height="20"
-                                             Style="{StaticResource MaterialDesignCircularProgressBar}"
-                                             VerticalAlignment="Center"
-                                             Visibility="{Binding IsTesting, Converter={StaticResource BooleanToVisibilityConverter}}"/>
-                            </StackPanel>
-
-                            <TextBlock Text="{Binding CrsTestResult}" FontSize="13" FontWeight="Medium" Margin="0 0 0 0"
-                                       Foreground="#000000" TextWrapping="Wrap"/>
-                        </StackPanel>
-                    </materialDesign:Card>
-                </ScrollViewer>
-            </TabItem>
-
-            <!-- ── Tab 4: Test all 3 MySQL connections ───────────────────── -->
+            <!-- ── Tab 3: Test both MySQL connections ───────────────────── -->
             <TabItem Header="🔌 TEST CONNECTIONS">
                 <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="0 8 0 0">
                     <materialDesign:Card Padding="20">
@@ -248,11 +178,11 @@
                                 <materialDesign:PackIcon Kind="CheckNetwork" Width="20" Height="20"
                                                          VerticalAlignment="Center" Margin="0 0 8 0"
                                                          Foreground="#000000"/>
-                                <TextBlock Text="Test 3 Connections" FontSize="16" FontWeight="SemiBold" VerticalAlignment="Center" Foreground="#000000"/>
+                                <TextBlock Text="Test 2 Connections" FontSize="16" FontWeight="SemiBold" VerticalAlignment="Center" Foreground="#000000"/>
                             </StackPanel>
 
                             <StackPanel Orientation="Horizontal" Margin="0 0 0 12">
-                                <Button x:Name="TestConnectionBtn" Content="🔌 TEST 3 CONNECTIONS"
+                                <Button x:Name="TestConnectionBtn" Content="🔌 TEST 2 CONNECTIONS"
                                         Command="{Binding TestThreeCommand}"
                                         Style="{StaticResource MaterialDesignRaisedButton}"
                                         Margin="0 0 12 0"/>
@@ -263,14 +193,11 @@
                                              Visibility="{Binding IsTesting, Converter={StaticResource BooleanToVisibilityConverter}}"/>
                             </StackPanel>
 
-                            <TextBlock Text="1 — Cloud Sync (Hostinger)" FontSize="12" Foreground="#555555"/>
+                            <TextBlock Text="1 — Online (Cloud Sync / Hostinger)" FontSize="12" Foreground="#555555"/>
                             <TextBlock Text="{Binding GgmsTestResult}" FontSize="13" FontWeight="Medium" Margin="0 0 0 8"
                                        Foreground="#000000" TextWrapping="Wrap"/>
                             <TextBlock Text="2 — Network Server (Office LAN)" FontSize="12" Foreground="#555555"/>
                             <TextBlock Text="{Binding NetworkTestResult}" FontSize="13" FontWeight="Medium" Margin="0 0 0 8"
-                                       Foreground="#000000" TextWrapping="Wrap"/>
-                            <TextBlock Text="3 — CRS Database (Read Only)" FontSize="12" Foreground="#555555"/>
-                            <TextBlock Text="{Binding CrsTestResult}" FontSize="13" FontWeight="Medium"
                                        Foreground="#000000" TextWrapping="Wrap"/>
                         </StackPanel>
                     </materialDesign:Card>
