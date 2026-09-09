@@ -52,7 +52,6 @@ namespace GoodGovernanceApp.ViewModels
             TestThreeCommand = new RelayCommand(async _ => await ExecuteTestThree(), _ => !IsTesting);
             TestCloudCommand = new RelayCommand(async _ => await ExecuteTestCloud(), _ => !IsTesting);
             TestNetworkCommand = new RelayCommand(async _ => await ExecuteTestNetwork(), _ => !IsTesting);
-            TestCrsCommand = new RelayCommand(async _ => await ExecuteTestCrs(), _ => !IsTesting);
             SaveSettingsCommand = new RelayCommand(async _ => await ExecuteSaveSettings(null));
             OpenSqliteFolderCommand = new RelayCommand(_ => OpenSqliteFolder());
 
@@ -250,44 +249,6 @@ namespace GoodGovernanceApp.ViewModels
 
         public string NetworkConnectionString => BuildNetworkConnStr();
 
-        // ── CRS Connection Fields ────────────────────────────────────────────
-        private string _crsServer = "193.203.175.157";
-        public string CrsServer
-        {
-            get => _crsServer;
-            set { _crsServer = value; OnPropertyChanged(); }
-        }
-
-        private string _crsPort = "3306";
-        public string CrsPort
-        {
-            get => _crsPort;
-            set { _crsPort = value; OnPropertyChanged(); }
-        }
-
-        private string _crsDatabase = "u518908950_crs";
-        public string CrsDatabase
-        {
-            get => _crsDatabase;
-            set { _crsDatabase = value; OnPropertyChanged(); }
-        }
-
-        private string _crsUser = "u518908950_crs";
-        public string CrsUser
-        {
-            get => _crsUser;
-            set { _crsUser = value; OnPropertyChanged(); }
-        }
-
-        private string _crsPassword = string.Empty;
-        public string CrsPassword
-        {
-            get => _crsPassword;
-            set { _crsPassword = value; OnPropertyChanged(); }
-        }
-
-
-
         // ── Status ───────────────────────────────────────────────────────────
         private string _statusMessage = string.Empty;
         public string StatusMessage
@@ -308,13 +269,6 @@ namespace GoodGovernanceApp.ViewModels
         {
             get => _networkTestResult;
             set { _networkTestResult = value; OnPropertyChanged(); }
-        }
-
-        private string _crsTestResult = string.Empty;
-        public string CrsTestResult
-        {
-            get => _crsTestResult;
-            set { _crsTestResult = value; OnPropertyChanged(); }
         }
 
         private bool _isTesting;
@@ -396,7 +350,6 @@ namespace GoodGovernanceApp.ViewModels
         public ICommand TestThreeCommand { get; }
         public ICommand TestCloudCommand { get; }
         public ICommand TestNetworkCommand { get; }
-        public ICommand TestCrsCommand { get; }
         public ICommand SaveSettingsCommand { get; }
         public ICommand SaveBackupSettingsCommand { get; }
         public ICommand FullBackupCommand { get; }
@@ -442,23 +395,6 @@ namespace GoodGovernanceApp.ViewModels
             return builder.ConnectionString;
         }
 
-        public string BuildCrsConnStr()
-        {
-            var builder = new MySqlConnectionStringBuilder
-            {
-                Server = CrsServer,
-                Port = uint.TryParse(CrsPort, out var p) ? p : 3306,
-                Database = CrsDatabase,
-                UserID = CrsUser,
-                Password = CrsPassword,
-                AllowZeroDateTime = true,
-                ConvertZeroDateTime = true,
-                ConnectionTimeout = 15,
-                SslMode = MySqlSslMode.None
-            };
-            return builder.ConnectionString;
-        }
-
         private string ActiveGgmsConnStr => BuildRemoteConnStr();
 
         // ── Connection Test ───────────────────────────────────────────────────
@@ -466,9 +402,8 @@ namespace GoodGovernanceApp.ViewModels
         {
             IsTesting = true;
             SqliteTestResult = "Testing Local SQLite...";
-            GgmsTestResult = "Testing Cloud / Sync...";
+            GgmsTestResult = "Testing Online...";
             NetworkTestResult = "Testing Network (LAN)...";
-            CrsTestResult = "Testing CRS...";
 
             // 1. Test Local SQLite DB
             var sqliteTask = Task.Run(async () =>
@@ -496,45 +431,36 @@ namespace GoodGovernanceApp.ViewModels
             // 3. Test Network (Office LAN MySQL)
             var networkTask = TestConnectionAsync(BuildNetworkConnStr());
 
-            // 4. Test CRS (MySQL)
-            var crsTask = TestConnectionAsync(BuildCrsConnStr());
-
-            await Task.WhenAll(sqliteTask, ggmsTask, networkTask, crsTask);
+            await Task.WhenAll(sqliteTask, ggmsTask, networkTask);
 
             var (sqliteOk, sqliteMsg) = sqliteTask.Result;
             var (ggmsOk, ggmsMsg) = ggmsTask.Result;
             var (networkOk, networkMsg) = networkTask.Result;
-            var (crsOk, crsMsg) = crsTask.Result;
 
             SqliteTestResult = sqliteOk ? $"✅ Local SQLite: Connected ({sqliteMsg})" : $"❌ Local SQLite: {sqliteMsg}";
-            GgmsTestResult = ggmsOk ? "✅ Cloud Sync: Connected" : $"⚠ Cloud Sync: Offline / Unreachable ({ggmsMsg})";
+            GgmsTestResult = ggmsOk ? "✅ Online: Connected" : $"⚠ Online: Offline / Unreachable ({ggmsMsg})";
             NetworkTestResult = networkOk ? "✅ Network (LAN): Connected" : $"⚠ Network (LAN): Offline / Unreachable ({networkMsg})";
-            CrsTestResult = crsOk ? "✅ CRS: Connected" : $"⚠ CRS: Offline / Unreachable ({crsMsg})";
             IsTesting = false;
         }
 
-        // ── Test 3 MySQL connections (Cloud + Network LAN + CRS, no SQLite) ──
+        // ── Test 2 MySQL connections (Online + Network LAN, no SQLite) ──
         // Used by the Database Connection Settings popup with tab navigation.
         private async Task ExecuteTestThree()
         {
             IsTesting = true;
-            GgmsTestResult = "Testing Cloud / Sync...";
+            GgmsTestResult = "Testing Online...";
             NetworkTestResult = "Testing Network (LAN)...";
-            CrsTestResult = "Testing CRS...";
 
             var ggmsTask = TestConnectionAsync(ActiveGgmsConnStr);
             var networkTask = TestConnectionAsync(BuildNetworkConnStr());
-            var crsTask = TestConnectionAsync(BuildCrsConnStr());
 
-            await Task.WhenAll(ggmsTask, networkTask, crsTask);
+            await Task.WhenAll(ggmsTask, networkTask);
 
             var (ggmsOk, ggmsMsg) = ggmsTask.Result;
             var (networkOk, networkMsg) = networkTask.Result;
-            var (crsOk, crsMsg) = crsTask.Result;
 
-            GgmsTestResult = ggmsOk ? "✅ Cloud Sync: Connected" : $"⚠ Cloud Sync: Offline / Unreachable ({ggmsMsg})";
+            GgmsTestResult = ggmsOk ? "✅ Online: Connected" : $"⚠ Online: Offline / Unreachable ({ggmsMsg})";
             NetworkTestResult = networkOk ? "✅ Network (LAN): Connected" : $"⚠ Network (LAN): Offline / Unreachable ({networkMsg})";
-            CrsTestResult = crsOk ? "✅ CRS: Connected" : $"⚠ CRS: Offline / Unreachable ({crsMsg})";
             IsTesting = false;
         }
 
@@ -542,9 +468,9 @@ namespace GoodGovernanceApp.ViewModels
         private async Task ExecuteTestCloud()
         {
             IsTesting = true;
-            GgmsTestResult = "Testing Cloud / Sync...";
+            GgmsTestResult = "Testing Online...";
             var (ok, msg) = await TestConnectionAsync(ActiveGgmsConnStr);
-            GgmsTestResult = ok ? "✅ Cloud Sync: Connected" : $"⚠ Cloud Sync: Offline / Unreachable ({msg})";
+            GgmsTestResult = ok ? "✅ Online: Connected" : $"⚠ Online: Offline / Unreachable ({msg})";
             IsTesting = false;
         }
 
@@ -554,15 +480,6 @@ namespace GoodGovernanceApp.ViewModels
             NetworkTestResult = "Testing Network (LAN)...";
             var (ok, msg) = await TestConnectionAsync(BuildNetworkConnStr());
             NetworkTestResult = ok ? "✅ Network (LAN): Connected" : $"⚠ Network (LAN): Offline / Unreachable ({msg})";
-            IsTesting = false;
-        }
-
-        private async Task ExecuteTestCrs()
-        {
-            IsTesting = true;
-            CrsTestResult = "Testing CRS...";
-            var (ok, msg) = await TestConnectionAsync(BuildCrsConnStr());
-            CrsTestResult = ok ? "✅ CRS: Connected" : $"⚠ CRS: Offline / Unreachable ({msg})";
             IsTesting = false;
         }
 
@@ -644,13 +561,6 @@ namespace GoodGovernanceApp.ViewModels
                         NetworkPassword = "network@2026";
                     }
                 }
-
-                // Load CRS fields from appsettings.json CrsConnection section
-                CrsServer   = _config["CrsConnection:Server"]   ?? "193.203.175.157";
-                CrsPort     = _config["CrsConnection:Port"]     ?? "3306";
-                CrsDatabase = _config["CrsConnection:Database"] ?? "u518908950_crs";
-                CrsUser     = _config["CrsConnection:User"]     ?? "u518908950_crs";
-                CrsPassword = _config["CrsConnection:Password"] ?? "Sulop@2025";
             }
             catch { StatusMessage = "Error loading settings."; }
         }
@@ -679,9 +589,9 @@ namespace GoodGovernanceApp.ViewModels
                 IsTesting = false;
 
                 // Write updated settings to appsettings.json (single source of truth)
+                // Only 2 connections: Online (Remote) + Network (LAN)
                 _databaseConfig.SaveToAppsettings(
                     DatabaseMode, ActiveGgmsConnStr,
-                    CrsServer, CrsPort, CrsDatabase, CrsUser, CrsPassword,
                     BuildNetworkConnStr());
 
                 RefreshSqliteInfo();
