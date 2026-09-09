@@ -13,7 +13,7 @@ public interface IDatabaseConfig
     string ConnectionString { get; }
     string NetworkConnectionString { get; }
     string CrsConnectionString { get; }
-    void SaveToAppsettings(string mode, string ggmsConnStr, string crsServer, string crsPort, string crsDb, string crsUser, string crsPass, string networkConnStr = "");
+    void SaveToAppsettings(string mode, string ggmsConnStr, string networkConnStr = "");
 }
 
 public class DatabaseConfig : IDatabaseConfig
@@ -68,7 +68,6 @@ public class DatabaseConfig : IDatabaseConfig
 
     public void SaveToAppsettings(
         string mode, string ggmsConnStr,
-        string crsServer, string crsPort, string crsDb, string crsUser, string crsPass,
         string networkConnStr = "")
     {
         string appDataFolder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "GoodGovernanceApp");
@@ -97,19 +96,11 @@ public class DatabaseConfig : IDatabaseConfig
             root["AppSettings"] = new JsonObject();
         if (!root.ContainsKey("ConnectionStrings") || root["ConnectionStrings"] is not JsonObject)
             root["ConnectionStrings"] = new JsonObject();
-        if (!root.ContainsKey("CrsConnection") || root["CrsConnection"] is not JsonObject)
-            root["CrsConnection"] = new JsonObject();
 
         root["AppSettings"]!["DatabaseMode"] = "Remote";
         root["ConnectionStrings"]!["RemoteConnection"] = ggmsConnStr;
         if (!string.IsNullOrWhiteSpace(networkConnStr))
             root["ConnectionStrings"]!["NetworkConnection"] = networkConnStr;
-
-        root["CrsConnection"]!["Server"]   = crsServer;
-        root["CrsConnection"]!["Port"]     = crsPort;
-        root["CrsConnection"]!["Database"] = crsDb;
-        root["CrsConnection"]!["User"]     = crsUser;
-        root["CrsConnection"]!["Password"] = crsPass;
 
         var options = new JsonSerializerOptions { WriteIndented = true };
         ConfigFileHelper.AtomicWriteJson(path, root.ToJsonString(options));
