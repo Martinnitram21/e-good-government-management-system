@@ -171,7 +171,7 @@ namespace GoodGovernanceApp.ViewModels
         public string DatabaseMode { get; set; } = "Remote";
 
         // ── Cloud Sync (Hostinger) Fields ────────────────────────────────────
-        private string _remoteServer = "194.59.164.58";
+        private string _remoteServer = "193.203.175.157";
         public string RemoteServer
         {
             get => _remoteServer;
@@ -185,14 +185,14 @@ namespace GoodGovernanceApp.ViewModels
             set { _remotePort = value; OnPropertyChanged(); }
         }
 
-        private string _remoteDatabase = "u621755393_ggms";
+        private string _remoteDatabase = "u518908950_ggms";
         public string RemoteDatabase
         {
             get => _remoteDatabase;
             set { _remoteDatabase = value; OnPropertyChanged(); }
         }
 
-        private string _remoteUser = "u621755393_ggms_user";
+        private string _remoteUser = "u518908950_ggms";
         public string RemoteUser
         {
             get => _remoteUser;
@@ -209,7 +209,7 @@ namespace GoodGovernanceApp.ViewModels
         public string RemoteConnectionString => BuildRemoteConnStr();
 
         // ── CRS Connection Fields ────────────────────────────────────────────
-        private string _crsServer = "localhost";
+        private string _crsServer = "193.203.175.157";
         public string CrsServer
         {
             get => _crsServer;
@@ -223,14 +223,14 @@ namespace GoodGovernanceApp.ViewModels
             set { _crsPort = value; OnPropertyChanged(); }
         }
 
-        private string _crsDatabase = "crs_db";
+        private string _crsDatabase = "u518908950_crs";
         public string CrsDatabase
         {
             get => _crsDatabase;
             set { _crsDatabase = value; OnPropertyChanged(); }
         }
 
-        private string _crsUser = "root";
+        private string _crsUser = "u518908950_crs";
         public string CrsUser
         {
             get => _crsUser;
@@ -468,35 +468,35 @@ namespace GoodGovernanceApp.ViewModels
             {
                 // Read Remote Connection string from appsettings.json and split into fields
                 string rawRemote = _config.GetConnectionString("RemoteConnection") 
-                    ?? "Server=194.59.164.58;Port=3306;Database=u621755393_ggms;User=u621755393_ggms_user;Password=Ggms@2026;AllowZeroDateTime=True;ConvertZeroDateTime=True;";
+                    ?? "Server=193.203.175.157;Port=3306;Database=u518908950_ggms;User=u518908950_ggms;Password=Sulop@2025;AllowZeroDateTime=True;ConvertZeroDateTime=True;";
 
                 if (!string.IsNullOrWhiteSpace(rawRemote))
                 {
                     try
                     {
                         var b = new MySqlConnectionStringBuilder(rawRemote);
-                        RemoteServer = !string.IsNullOrWhiteSpace(b.Server) ? b.Server : "194.59.164.58";
+                        RemoteServer = !string.IsNullOrWhiteSpace(b.Server) ? b.Server : "193.203.175.157";
                         RemotePort = b.Port > 0 ? b.Port.ToString() : "3306";
-                        RemoteDatabase = !string.IsNullOrWhiteSpace(b.Database) ? b.Database : "u621755393_ggms";
-                        RemoteUser = !string.IsNullOrWhiteSpace(b.UserID) ? b.UserID : "u621755393_ggms_user";
+                        RemoteDatabase = !string.IsNullOrWhiteSpace(b.Database) ? b.Database : "u518908950_ggms";
+                        RemoteUser = !string.IsNullOrWhiteSpace(b.UserID) ? b.UserID : "u518908950_ggms";
                         RemotePassword = b.Password ?? "";
                     }
                     catch
                     {
-                        RemoteServer = "194.59.164.58";
+                        RemoteServer = "193.203.175.157";
                         RemotePort = "3306";
-                        RemoteDatabase = "u621755393_ggms";
-                        RemoteUser = "u621755393_ggms_user";
-                        RemotePassword = "Ggms@2026";
+                        RemoteDatabase = "u518908950_ggms";
+                        RemoteUser = "u518908950_ggms";
+                        RemotePassword = "Sulop@2025";
                     }
                 }
 
                 // Load CRS fields from appsettings.json CrsConnection section
-                CrsServer   = _config["CrsConnection:Server"]   ?? "svr12367.hstgr.io";
+                CrsServer   = _config["CrsConnection:Server"]   ?? "193.203.175.157";
                 CrsPort     = _config["CrsConnection:Port"]     ?? "3306";
-                CrsDatabase = _config["CrsConnection:Database"] ?? "u621755393_crs";
-                CrsUser     = _config["CrsConnection:User"]     ?? "u621755393_crs_user";
-                CrsPassword = _config["CrsConnection:Password"] ?? "Crs@2026";
+                CrsDatabase = _config["CrsConnection:Database"] ?? "u518908950_crs";
+                CrsUser     = _config["CrsConnection:User"]     ?? "u518908950_crs";
+                CrsPassword = _config["CrsConnection:Password"] ?? "Sulop@2025";
             }
             catch { StatusMessage = "Error loading settings."; }
         }

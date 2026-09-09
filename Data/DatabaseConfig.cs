@@ -30,7 +30,7 @@ public class DatabaseConfig : IDatabaseConfig
         {
             return _config.GetConnectionString("RemoteConnection")
                 ?? _config.GetConnectionString("LocalConnection")
-                ?? "Server=194.59.164.58;Port=3306;Database=u621755393_ggms;User=u621755393_ggms_user;Password=Ggms@2026;AllowZeroDateTime=True;ConvertZeroDateTime=True;";
+                ?? "Server=193.203.175.157;Port=3306;Database=u518908950_ggms;User=u518908950_ggms;Password=Sulop@2025;AllowZeroDateTime=True;ConvertZeroDateTime=True;";
         }
     }
 
@@ -40,11 +40,11 @@ public class DatabaseConfig : IDatabaseConfig
         {
             var builder = new MySqlConnectionStringBuilder
             {
-                Server = _config["CrsConnection:Server"] ?? "svr12367.hstgr.io",
+                Server = _config["CrsConnection:Server"] ?? "193.203.175.157",
                 Port = uint.TryParse(_config["CrsConnection:Port"], out var p) ? p : 3306,
-                Database = _config["CrsConnection:Database"] ?? "u621755393_crs",
-                UserID = _config["CrsConnection:User"] ?? "u621755393_crs_user",
-                Password = _config["CrsConnection:Password"] ?? "Crs@2026",
+                Database = _config["CrsConnection:Database"] ?? "u518908950_crs",
+                UserID = _config["CrsConnection:User"] ?? "u518908950_crs",
+                Password = _config["CrsConnection:Password"] ?? "Sulop@2025",
                 AllowZeroDateTime = true,
                 ConvertZeroDateTime = true,
                 ConnectionTimeout = 15,

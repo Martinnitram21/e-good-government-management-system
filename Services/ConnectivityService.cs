@@ -98,7 +98,7 @@ public class ConnectivityService : IConnectivityService
             if (string.IsNullOrWhiteSpace(connStr))
                 return false;
 
-            string host = "194.59.164.58";
+            string host = "193.203.175.157";
             int port = 3306;
 
             try
@@ -143,7 +143,7 @@ public class ConnectivityService : IConnectivityService
             if (string.IsNullOrWhiteSpace(connStr))
                 return false;
 
-            string host = "svr12367.hstgr.io";
+            string host = "193.203.175.157";
             int port = 3306;
 
             try

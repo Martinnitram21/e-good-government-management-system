@@ -82,15 +82,15 @@ public partial class App : Application
                     // Fallback: create default appsettings.json automatically
                     const string defaultJson = @"{
   ""ConnectionStrings"": {
-    ""RemoteConnection"": ""Server=194.59.164.58;Port=3306;Database=u621755393_ggms;User=u621755393_ggms_user;Password=Ggms@2026;AllowZeroDateTime=True;ConvertZeroDateTime=True;"",
+    ""RemoteConnection"": ""Server=193.203.175.157;Port=3306;Database=u518908950_ggms;User=u518908950_ggms;Password=Sulop@2025;AllowZeroDateTime=True;ConvertZeroDateTime=True;"",
     ""LocalConnection"": ""Server=127.0.0.1;Port=3306;Database=govern;User=root;Password=root;SslMode=None;AllowPublicKeyRetrieval=True;""
   },
   ""CrsConnection"": {
-    ""Server"": ""svr12367.hstgr.io"",
+    ""Server"": ""193.203.175.157"",
     ""Port"": ""3306"",
-    ""Database"": ""u621755393_crs"",
-    ""User"": ""u621755393_crs_user"",
-    ""Password"": ""Crs@2026""
+    ""Database"": ""u518908950_crs"",
+    ""User"": ""u518908950_crs"",
+    ""Password"": ""Sulop@2025""
   },
   ""SmtpConnection"": {
     ""EmailAddress"": ""bryanluy822@gmail.com"",
