@@ -11,8 +11,9 @@ namespace GoodGovernanceApp.Data;
 public interface IDatabaseConfig
 {
     string ConnectionString { get; }
+    string NetworkConnectionString { get; }
     string CrsConnectionString { get; }
-    void SaveToAppsettings(string mode, string ggmsConnStr, string crsServer, string crsPort, string crsDb, string crsUser, string crsPass);
+    void SaveToAppsettings(string mode, string ggmsConnStr, string crsServer, string crsPort, string crsDb, string crsUser, string crsPass, string networkConnStr = "");
 }
 
 public class DatabaseConfig : IDatabaseConfig
@@ -31,6 +32,17 @@ public class DatabaseConfig : IDatabaseConfig
             return _config.GetConnectionString("RemoteConnection")
                 ?? _config.GetConnectionString("LocalConnection")
                 ?? "Server=193.203.175.157;Port=3306;Database=u518908950_ggms;User=u518908950_ggms;Password=Sulop@2025;AllowZeroDateTime=True;ConvertZeroDateTime=True;";
+        }
+    }
+
+    public string NetworkConnectionString
+    {
+        get
+        {
+            // Prefilled office-network (LAN) database; editable in Settings.
+            return _config.GetConnectionString("NetworkConnection")
+                ?? _config.GetConnectionString("LanConnection")
+                ?? "Server=192.168.0.42;Port=3306;Database=agms_db;User=root;Password=network@2026;AllowZeroDateTime=True;ConvertZeroDateTime=True;";
         }
     }
 
@@ -56,7 +68,8 @@ public class DatabaseConfig : IDatabaseConfig
 
     public void SaveToAppsettings(
         string mode, string ggmsConnStr,
-        string crsServer, string crsPort, string crsDb, string crsUser, string crsPass)
+        string crsServer, string crsPort, string crsDb, string crsUser, string crsPass,
+        string networkConnStr = "")
     {
         string appDataFolder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "GoodGovernanceApp");
         Directory.CreateDirectory(appDataFolder);
@@ -89,6 +102,8 @@ public class DatabaseConfig : IDatabaseConfig
 
         root["AppSettings"]!["DatabaseMode"] = "Remote";
         root["ConnectionStrings"]!["RemoteConnection"] = ggmsConnStr;
+        if (!string.IsNullOrWhiteSpace(networkConnStr))
+            root["ConnectionStrings"]!["NetworkConnection"] = networkConnStr;
 
         root["CrsConnection"]!["Server"]   = crsServer;
         root["CrsConnection"]!["Port"]     = crsPort;

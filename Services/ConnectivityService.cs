@@ -12,6 +12,7 @@ public interface IConnectivityService
 {
     bool IsOnline { get; }
     bool IsCrsOnline { get; }
+    bool IsNetworkOnline { get; }
     bool IsInternetAvailable { get; }
     event Action<bool>? OnConnectionStatusChanged;
     void StartMonitoring();
@@ -22,6 +23,7 @@ public interface IConnectivityService
 public class ConnectivityService : IConnectivityService
 {
     private volatile bool _isOnline = false;
+    private volatile bool _isNetworkOnline = false;
     private volatile bool _isCrsOnline = false;
     private volatile bool _isInternetAvailable = false;
     private readonly IDatabaseConfig _dbConfig;
@@ -30,6 +32,7 @@ public class ConnectivityService : IConnectivityService
     public event Action<bool>? OnConnectionStatusChanged;
 
     public bool IsOnline => _isOnline;
+    public bool IsNetworkOnline => _isNetworkOnline;
     public bool IsCrsOnline => _isCrsOnline;
     public bool IsInternetAvailable => _isInternetAvailable;
 
@@ -79,10 +82,12 @@ public class ConnectivityService : IConnectivityService
         _isInternetAvailable = NetworkInterface.GetIsNetworkAvailable();
 
         var hostingerTask = CheckHostingerAsync();
+        var networkTask = CheckNetworkAsync();
         var crsTask = CheckCrsAsync();
-        await Task.WhenAll(hostingerTask, crsTask);
+        await Task.WhenAll(hostingerTask, networkTask, crsTask);
 
         _isOnline = hostingerTask.Result;
+        _isNetworkOnline = networkTask.Result;
         _isCrsOnline = crsTask.Result;
 
         OnConnectionStatusChanged?.Invoke(_isOnline);
@@ -117,6 +122,49 @@ public class ConnectivityService : IConnectivityService
                 return false;
 
             // Direct connection verification with 5s timeout
+            var testBuilder = new MySqlConnectionStringBuilder(connStr)
+            {
+                ConnectionTimeout = 5,
+                SslMode = MySqlSslMode.None
+            };
+
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            using var conn = new MySqlConnection(testBuilder.ConnectionString);
+            await conn.OpenAsync(cts.Token);
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    // ── Office Network (LAN) ──────────────────────────────────────────────────
+    private async Task<bool> CheckNetworkAsync()
+    {
+        try
+        {
+            string connStr = _dbConfig.NetworkConnectionString;
+            if (string.IsNullOrWhiteSpace(connStr))
+                return false;
+
+            string host = "192.168.0.42";
+            int port = 3306;
+
+            try
+            {
+                var builder = new MySqlConnectionStringBuilder(connStr);
+                if (!string.IsNullOrWhiteSpace(builder.Server))
+                    host = builder.Server;
+                if (builder.Port > 0)
+                    port = (int)builder.Port;
+            }
+            catch { }
+
+            bool tcpOk = await TcpPingAsync(host, port, 3000);
+            if (!tcpOk)
+                return false;
+
             var testBuilder = new MySqlConnectionStringBuilder(connStr)
             {
                 ConnectionTimeout = 5,

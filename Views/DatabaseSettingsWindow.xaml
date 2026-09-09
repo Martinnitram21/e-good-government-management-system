@@ -3,7 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
         xmlns:viewmodels="clr-namespace:GoodGovernanceApp.ViewModels"
-        Title="Database Connection Settings" Height="486" Width="640"
+        Title="Database Connection Settings" Height="600" Width="640"
         WindowStartupLocation="CenterScreen"
         Background="{DynamicResource MaterialDesignPaper}"
         TextElement.Foreground="{DynamicResource MaterialDesignBody}"
@@ -18,156 +18,269 @@
         </Grid.RowDefinitions>
 
         <!-- Header -->
-        <StackPanel Grid.Row="0" Margin="0 0 0 16">
+        <StackPanel Grid.Row="0" Margin="0 0 0 12">
             <TextBlock Text="Database Configuration" FontSize="24" FontWeight="Light" Foreground="#000000"/>
-            <TextBlock Text="Select a preset or manually enter your connection details." 
+            <TextBlock Text="Pick a tab, then enter or verify that connection's details."
                        FontSize="12" Foreground="#000000" Margin="0 4 0 0"/>
         </StackPanel>
 
-        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
-            <StackPanel>
+        <!-- Tab navigation: one tab per connection -->
+        <TabControl Grid.Row="1"
+                    Style="{StaticResource MaterialDesignTabControl}"
+                    materialDesign:ColorZoneAssist.Mode="PrimaryMid">
 
-                <!-- GGMS Remote Connection -->
-                <materialDesign:Card Margin="0 0 0 16" Padding="20">
-                    <StackPanel>
-                        <StackPanel Orientation="Horizontal" Margin="0 0 0 12">
-                            <materialDesign:PackIcon Kind="CloudSync" Width="22" Height="22" 
-                                                     VerticalAlignment="Center" Margin="0 0 8 0"
-                                                     Foreground="#000000"/>
-                            <TextBlock Text="Cloud Sync Database (Hostinger)" FontSize="18" FontWeight="SemiBold" VerticalAlignment="Center" Foreground="#000000"/>
-                        </StackPanel>
+            <!-- ── Tab 1: Cloud Sync ─────────────────────────────────────── -->
+            <TabItem Header="☁ CLOUD SYNC">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="0 8 0 0">
+                    <materialDesign:Card Padding="20">
+                        <StackPanel>
+                            <StackPanel Orientation="Horizontal" Margin="0 0 0 12">
+                                <materialDesign:PackIcon Kind="CloudSync" Width="22" Height="22"
+                                                         VerticalAlignment="Center" Margin="0 0 8 0"
+                                                         Foreground="#000000"/>
+                                <TextBlock Text="Cloud Sync Database (Hostinger)" FontSize="16" FontWeight="SemiBold" VerticalAlignment="Center" Foreground="#000000"/>
+                            </StackPanel>
 
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="3*"/>
-                                <ColumnDefinition Width="16"/>
-                                <ColumnDefinition Width="1*"/>
-                            </Grid.ColumnDefinitions>
-                            <TextBox Grid.Column="0" materialDesign:HintAssist.Hint="Hostinger Server / IP"
-                                     Text="{Binding RemoteServer, UpdateSourceTrigger=PropertyChanged}"
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="3*"/>
+                                    <ColumnDefinition Width="16"/>
+                                    <ColumnDefinition Width="1*"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBox Grid.Column="0" materialDesign:HintAssist.Hint="Hostinger Server / IP"
+                                         Text="{Binding RemoteServer, UpdateSourceTrigger=PropertyChanged}"
+                                         Style="{StaticResource MaterialDesignFloatingHintTextBox}"
+                                         Foreground="#000000"
+                                         Margin="0 0 0 12"/>
+                                <TextBox Grid.Column="2" materialDesign:HintAssist.Hint="Port"
+                                         Text="{Binding RemotePort, UpdateSourceTrigger=PropertyChanged}"
+                                         Style="{StaticResource MaterialDesignFloatingHintTextBox}"
+                                         Foreground="#000000"
+                                         Margin="0 0 0 12"/>
+                            </Grid>
+
+                            <TextBox materialDesign:HintAssist.Hint="Database Name"
+                                     Text="{Binding RemoteDatabase, UpdateSourceTrigger=PropertyChanged}"
                                      Style="{StaticResource MaterialDesignFloatingHintTextBox}"
                                      Foreground="#000000"
                                      Margin="0 0 0 12"/>
-                            <TextBox Grid.Column="2" materialDesign:HintAssist.Hint="Port"
-                                     Text="{Binding RemotePort, UpdateSourceTrigger=PropertyChanged}"
+
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="16"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBox Grid.Column="0" materialDesign:HintAssist.Hint="Database Username"
+                                         Text="{Binding RemoteUser, UpdateSourceTrigger=PropertyChanged}"
+                                         Style="{StaticResource MaterialDesignFloatingHintTextBox}"
+                                         Foreground="#000000"/>
+                                <TextBox Grid.Column="2" materialDesign:HintAssist.Hint="Database Password"
+                                         Text="{Binding RemotePassword, UpdateSourceTrigger=PropertyChanged}"
+                                         Foreground="#000000"
+                                         Style="{StaticResource MaterialDesignFloatingHintTextBox}"/>
+                            </Grid>
+
+                            <StackPanel Orientation="Horizontal" Margin="0 16 0 8">
+                                <Button Content="🔌 TEST CLOUD CONNECTION"
+                                        Command="{Binding TestCloudCommand}"
+                                        Style="{StaticResource MaterialDesignOutlinedButton}"
+                                        Margin="0 0 12 0"/>
+                                <ProgressBar IsIndeterminate="True" Width="20" Height="20"
+                                             Style="{StaticResource MaterialDesignCircularProgressBar}"
+                                             VerticalAlignment="Center"
+                                             Visibility="{Binding IsTesting, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                            </StackPanel>
+
+                            <TextBlock Text="{Binding GgmsTestResult}" FontSize="13" FontWeight="Medium" Margin="0 0 0 0"
+                                       Foreground="#000000" TextWrapping="Wrap"/>
+                        </StackPanel>
+                    </materialDesign:Card>
+                </ScrollViewer>
+            </TabItem>
+
+            <!-- ── Tab 2: Network (Office LAN) ───────────────────────────── -->
+            <TabItem Header="🖧 NETWORK (LAN)">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="0 8 0 0">
+                    <materialDesign:Card Padding="20">
+                        <StackPanel>
+                            <StackPanel Orientation="Horizontal" Margin="0 0 0 12">
+                                <materialDesign:PackIcon Kind="Lan" Width="22" Height="22"
+                                                         VerticalAlignment="Center" Margin="0 0 8 0"
+                                                         Foreground="#000000"/>
+                                <TextBlock Text="Network Server (Office LAN)" FontSize="16" FontWeight="SemiBold" VerticalAlignment="Center" Foreground="#000000"/>
+                            </StackPanel>
+
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="3*"/>
+                                    <ColumnDefinition Width="16"/>
+                                    <ColumnDefinition Width="1*"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBox Grid.Column="0" materialDesign:HintAssist.Hint="Network Server / IP"
+                                         Text="{Binding NetworkServer, UpdateSourceTrigger=PropertyChanged}"
+                                         Style="{StaticResource MaterialDesignFloatingHintTextBox}"
+                                         Foreground="#000000"
+                                         Margin="0 0 0 12"/>
+                                <TextBox Grid.Column="2" materialDesign:HintAssist.Hint="Port"
+                                         Text="{Binding NetworkPort, UpdateSourceTrigger=PropertyChanged}"
+                                         Style="{StaticResource MaterialDesignFloatingHintTextBox}"
+                                         Foreground="#000000"
+                                         Margin="0 0 0 12"/>
+                            </Grid>
+
+                            <TextBox materialDesign:HintAssist.Hint="Database Name"
+                                     Text="{Binding NetworkDatabase, UpdateSourceTrigger=PropertyChanged}"
                                      Style="{StaticResource MaterialDesignFloatingHintTextBox}"
                                      Foreground="#000000"
                                      Margin="0 0 0 12"/>
-                        </Grid>
 
-                        <TextBox materialDesign:HintAssist.Hint="Database Name"
-                                 Text="{Binding RemoteDatabase, UpdateSourceTrigger=PropertyChanged}"
-                                 Style="{StaticResource MaterialDesignFloatingHintTextBox}"
-                                 Foreground="#000000"
-                                 Margin="0 0 0 12"/>
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="16"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBox Grid.Column="0" materialDesign:HintAssist.Hint="Database Username"
+                                         Text="{Binding NetworkUser, UpdateSourceTrigger=PropertyChanged}"
+                                         Style="{StaticResource MaterialDesignFloatingHintTextBox}"
+                                         Foreground="#000000"/>
+                                <TextBox Grid.Column="2" materialDesign:HintAssist.Hint="Database Password"
+                                         Text="{Binding NetworkPassword, UpdateSourceTrigger=PropertyChanged}"
+                                         Foreground="#000000"
+                                         Style="{StaticResource MaterialDesignFloatingHintTextBox}"/>
+                            </Grid>
 
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="16"/>
-                                <ColumnDefinition Width="*"/>
-                            </Grid.ColumnDefinitions>
-                            <TextBox Grid.Column="0" materialDesign:HintAssist.Hint="Database Username"
-                                     Text="{Binding RemoteUser, UpdateSourceTrigger=PropertyChanged}"
-                                     Style="{StaticResource MaterialDesignFloatingHintTextBox}"
-                                     Foreground="#000000"/>
-                            <TextBox Grid.Column="2" materialDesign:HintAssist.Hint="Database Password"
-                                     Text="{Binding RemotePassword, UpdateSourceTrigger=PropertyChanged}"
-                                     Foreground="#000000"
-                                     Style="{StaticResource MaterialDesignFloatingHintTextBox}"/>
-                        </Grid>
-                    </StackPanel>
-                </materialDesign:Card>
+                            <StackPanel Orientation="Horizontal" Margin="0 16 0 8">
+                                <Button Content="🔌 TEST NETWORK CONNECTION"
+                                        Command="{Binding TestNetworkCommand}"
+                                        Style="{StaticResource MaterialDesignOutlinedButton}"
+                                        Margin="0 0 12 0"/>
+                                <ProgressBar IsIndeterminate="True" Width="20" Height="20"
+                                             Style="{StaticResource MaterialDesignCircularProgressBar}"
+                                             VerticalAlignment="Center"
+                                             Visibility="{Binding IsTesting, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                            </StackPanel>
 
-                <!-- CRS Connection -->
-                <materialDesign:Card Margin="0 0 0 16" Padding="20">
-                    <StackPanel>
-                        <StackPanel Orientation="Horizontal" Margin="0 0 0 12">
-                            <materialDesign:PackIcon Kind="DatabaseSearch" Width="22" Height="22" 
-                                                     VerticalAlignment="Center" Margin="0 0 8 0"
-                                                     Foreground="#D90000"/>
-                            <TextBlock Text="CRS Database Connection (Read Only)" FontSize="18" FontWeight="SemiBold" VerticalAlignment="Center" Foreground="#000000"/>
+                            <TextBlock Text="{Binding NetworkTestResult}" FontSize="13" FontWeight="Medium" Margin="0 0 0 0"
+                                       Foreground="#000000" TextWrapping="Wrap"/>
                         </StackPanel>
+                    </materialDesign:Card>
+                </ScrollViewer>
+            </TabItem>
 
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="3*"/>
-                                <ColumnDefinition Width="16"/>
-                                <ColumnDefinition Width="1*"/>
-                            </Grid.ColumnDefinitions>
-                            <TextBox Grid.Column="0" materialDesign:HintAssist.Hint="CRS Server / IP"
-                                     Text="{Binding CrsServer, UpdateSourceTrigger=PropertyChanged}"
+            <!-- ── Tab 3: CRS (Read Only) ────────────────────────────────── -->
+            <TabItem Header="🗄 CRS (READ ONLY)">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="0 8 0 0">
+                    <materialDesign:Card Padding="20">
+                        <StackPanel>
+                            <StackPanel Orientation="Horizontal" Margin="0 0 0 12">
+                                <materialDesign:PackIcon Kind="DatabaseSearch" Width="22" Height="22"
+                                                         VerticalAlignment="Center" Margin="0 0 8 0"
+                                                         Foreground="#D90000"/>
+                                <TextBlock Text="CRS Database Connection (Read Only)" FontSize="16" FontWeight="SemiBold" VerticalAlignment="Center" Foreground="#000000"/>
+                            </StackPanel>
+
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="3*"/>
+                                    <ColumnDefinition Width="16"/>
+                                    <ColumnDefinition Width="1*"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBox Grid.Column="0" materialDesign:HintAssist.Hint="CRS Server / IP"
+                                         Text="{Binding CrsServer, UpdateSourceTrigger=PropertyChanged}"
+                                         Style="{StaticResource MaterialDesignFloatingHintTextBox}"
+                                         Foreground="#000000"
+                                         Margin="0 0 0 12"/>
+                                <TextBox Grid.Column="2" materialDesign:HintAssist.Hint="Port"
+                                         Text="{Binding CrsPort, UpdateSourceTrigger=PropertyChanged}"
+                                         Style="{StaticResource MaterialDesignFloatingHintTextBox}"
+                                         Foreground="#000000"
+                                         Margin="0 0 0 12"/>
+                            </Grid>
+
+                            <TextBox materialDesign:HintAssist.Hint="CRS Database Name"
+                                     Text="{Binding CrsDatabase, UpdateSourceTrigger=PropertyChanged}"
                                      Style="{StaticResource MaterialDesignFloatingHintTextBox}"
                                      Foreground="#000000"
                                      Margin="0 0 0 12"/>
-                            <TextBox Grid.Column="2" materialDesign:HintAssist.Hint="Port"
-                                     Text="{Binding CrsPort, UpdateSourceTrigger=PropertyChanged}"
-                                     Style="{StaticResource MaterialDesignFloatingHintTextBox}"
-                                     Foreground="#000000"
-                                     Margin="0 0 0 12"/>
-                        </Grid>
 
-                        <TextBox materialDesign:HintAssist.Hint="CRS Database Name"
-                                 Text="{Binding CrsDatabase, UpdateSourceTrigger=PropertyChanged}"
-                                 Style="{StaticResource MaterialDesignFloatingHintTextBox}"
-                                 Foreground="#000000"
-                                 Margin="0 0 0 12"/>
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="16"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBox Grid.Column="0" materialDesign:HintAssist.Hint="CRS Username"
+                                         Text="{Binding CrsUser, UpdateSourceTrigger=PropertyChanged}"
+                                         Style="{StaticResource MaterialDesignFloatingHintTextBox}"
+                                         Foreground="#000000"/>
+                                <TextBox Grid.Column="2" materialDesign:HintAssist.Hint="CRS Password"
+                                         Text="{Binding CrsPassword, UpdateSourceTrigger=PropertyChanged}"
+                                         Foreground="#000000"
+                                         Style="{StaticResource MaterialDesignFloatingHintTextBox}"/>
+                            </Grid>
 
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="16"/>
-                                <ColumnDefinition Width="*"/>
-                            </Grid.ColumnDefinitions>
-                            <TextBox Grid.Column="0" materialDesign:HintAssist.Hint="CRS Username"
-                                     Text="{Binding CrsUser, UpdateSourceTrigger=PropertyChanged}"
-                                     Style="{StaticResource MaterialDesignFloatingHintTextBox}"
-                                     Foreground="#000000"/>
-                            <TextBox Grid.Column="2" materialDesign:HintAssist.Hint="CRS Password"
-                                     Text="{Binding CrsPassword, UpdateSourceTrigger=PropertyChanged}"
-                                     Foreground="#000000"
-                                     Style="{StaticResource MaterialDesignFloatingHintTextBox}"/>
-                        </Grid>
-                    </StackPanel>
-                </materialDesign:Card>
-               
+                            <StackPanel Orientation="Horizontal" Margin="0 16 0 8">
+                                <Button Content="🔌 TEST CRS CONNECTION"
+                                        Command="{Binding TestCrsCommand}"
+                                        Style="{StaticResource MaterialDesignOutlinedButton}"
+                                        Margin="0 0 12 0"/>
+                                <ProgressBar IsIndeterminate="True" Width="20" Height="20"
+                                             Style="{StaticResource MaterialDesignCircularProgressBar}"
+                                             VerticalAlignment="Center"
+                                             Visibility="{Binding IsTesting, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                            </StackPanel>
 
-                <!-- Test Connection -->
-                <materialDesign:Card Padding="20">
-                    <StackPanel>
-                        <StackPanel Orientation="Horizontal" Margin="0 0 0 12">
-                            <materialDesign:PackIcon Kind="CheckNetwork" Width="20" Height="20" 
-                                                     VerticalAlignment="Center" Margin="0 0 8 0"
-                                                     Foreground="#000000"/>
-                            <TextBlock Text="Test Connections" FontSize="16" FontWeight="SemiBold" VerticalAlignment="Center"  Foreground="#000000"/>
+                            <TextBlock Text="{Binding CrsTestResult}" FontSize="13" FontWeight="Medium" Margin="0 0 0 0"
+                                       Foreground="#000000" TextWrapping="Wrap"/>
                         </StackPanel>
+                    </materialDesign:Card>
+                </ScrollViewer>
+            </TabItem>
 
-                        <StackPanel Orientation="Horizontal" Margin="0 0 0 12">
-                            <Button x:Name="TestConnectionBtn" Content="🔌 TEST BOTH"
-                                    Command="{Binding TestBothCommand}"
-                                    Style="{StaticResource MaterialDesignOutlinedButton}"
-                                    Margin="0 0 12 0"/>
-                            <ProgressBar x:Name="TestProgress" IsIndeterminate="True"
-                                         Width="24" Height="24"
-                                         Style="{StaticResource MaterialDesignCircularProgressBar}"
-                                         VerticalAlignment="Center"
-                                         Visibility="{Binding IsTesting, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+            <!-- ── Tab 4: Test all 3 MySQL connections ───────────────────── -->
+            <TabItem Header="🔌 TEST CONNECTIONS">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Margin="0 8 0 0">
+                    <materialDesign:Card Padding="20">
+                        <StackPanel>
+                            <StackPanel Orientation="Horizontal" Margin="0 0 0 12">
+                                <materialDesign:PackIcon Kind="CheckNetwork" Width="20" Height="20"
+                                                         VerticalAlignment="Center" Margin="0 0 8 0"
+                                                         Foreground="#000000"/>
+                                <TextBlock Text="Test 3 Connections" FontSize="16" FontWeight="SemiBold" VerticalAlignment="Center" Foreground="#000000"/>
+                            </StackPanel>
+
+                            <StackPanel Orientation="Horizontal" Margin="0 0 0 12">
+                                <Button x:Name="TestConnectionBtn" Content="🔌 TEST 3 CONNECTIONS"
+                                        Command="{Binding TestThreeCommand}"
+                                        Style="{StaticResource MaterialDesignRaisedButton}"
+                                        Margin="0 0 12 0"/>
+                                <ProgressBar x:Name="TestProgress" IsIndeterminate="True"
+                                             Width="24" Height="24"
+                                             Style="{StaticResource MaterialDesignCircularProgressBar}"
+                                             VerticalAlignment="Center"
+                                             Visibility="{Binding IsTesting, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                            </StackPanel>
+
+                            <TextBlock Text="1 — Cloud Sync (Hostinger)" FontSize="12" Foreground="#555555"/>
+                            <TextBlock Text="{Binding GgmsTestResult}" FontSize="13" FontWeight="Medium" Margin="0 0 0 8"
+                                       Foreground="#000000" TextWrapping="Wrap"/>
+                            <TextBlock Text="2 — Network Server (Office LAN)" FontSize="12" Foreground="#555555"/>
+                            <TextBlock Text="{Binding NetworkTestResult}" FontSize="13" FontWeight="Medium" Margin="0 0 0 8"
+                                       Foreground="#000000" TextWrapping="Wrap"/>
+                            <TextBlock Text="3 — CRS Database (Read Only)" FontSize="12" Foreground="#555555"/>
+                            <TextBlock Text="{Binding CrsTestResult}" FontSize="13" FontWeight="Medium"
+                                       Foreground="#000000" TextWrapping="Wrap"/>
                         </StackPanel>
+                    </materialDesign:Card>
+                </ScrollViewer>
+            </TabItem>
 
-                        <TextBlock Text="{Binding SqliteTestResult}" FontSize="13" FontWeight="Medium" Margin="0 0 0 4"
-                                   Foreground="#000000"/>
-                        <TextBlock Text="{Binding GgmsTestResult}" FontSize="13" FontWeight="Medium" Margin="0 0 0 4"
-                                   Foreground="#000000"/>
-                        <TextBlock Text="{Binding CrsTestResult}" FontSize="13" FontWeight="Medium"
-                                   Foreground="#000000"/>
-                    </StackPanel>
-                </materialDesign:Card>
-
-            </StackPanel>
-        </ScrollViewer>
+        </TabControl>
 
         <!-- Footer -->
-        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0 16 0 0">
+        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0 12 0 0">
             <TextBlock Text="{Binding StatusMessage}" VerticalAlignment="Center" Margin="0 0 16 0" Foreground="Green"/>
             <Button Content="SAVE &amp; CLOSE" Command="{Binding SaveSettingsCommand}" Click="SaveButton_Click"
                     Style="{StaticResource MaterialDesignRaisedButton}"/>

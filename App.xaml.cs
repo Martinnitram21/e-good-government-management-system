@@ -83,7 +83,9 @@ public partial class App : Application
                     const string defaultJson = @"{
   ""ConnectionStrings"": {
     ""RemoteConnection"": ""Server=193.203.175.157;Port=3306;Database=u518908950_ggms;User=u518908950_ggms;Password=Sulop@2025;AllowZeroDateTime=True;ConvertZeroDateTime=True;"",
-    ""LocalConnection"": ""Server=127.0.0.1;Port=3306;Database=govern;User=root;Password=root;SslMode=None;AllowPublicKeyRetrieval=True;""
+    ""LocalConnection"": ""Server=127.0.0.1;Port=3306;Database=govern;User=root;Password=root;SslMode=None;AllowPublicKeyRetrieval=True;"",
+    ""LanConnection"": ""Server=192.168.0.42;Port=3306;Database=agms_db;User=root;Password=network@2026;AllowZeroDateTime=True;ConvertZeroDateTime=True;"",
+    ""NetworkConnection"": ""Server=192.168.0.42;Port=3306;Database=agms_db;User=root;Password=network@2026;AllowZeroDateTime=True;ConvertZeroDateTime=True;""
   },
   ""CrsConnection"": {
     ""Server"": ""193.203.175.157"",
