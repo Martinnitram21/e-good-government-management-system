@@ -148,7 +148,7 @@ public class ConnectivityService : IConnectivityService
             if (string.IsNullOrWhiteSpace(connStr))
                 return false;
 
-            string host = "192.168.0.42";
+            string host = "192.168.0.47";
             int port = 3306;
 
             try
