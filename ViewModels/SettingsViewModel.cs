@@ -52,6 +52,7 @@ namespace GoodGovernanceApp.ViewModels
             TestThreeCommand = new RelayCommand(async _ => await ExecuteTestThree(), _ => !IsTesting);
             TestCloudCommand = new RelayCommand(async _ => await ExecuteTestCloud(), _ => !IsTesting);
             TestNetworkCommand = new RelayCommand(async _ => await ExecuteTestNetwork(), _ => !IsTesting);
+            TestCrsCommand = new RelayCommand(async _ => await ExecuteTestCrs(), _ => !IsTesting);
             SaveSettingsCommand = new RelayCommand(async _ => await ExecuteSaveSettings(null));
             OpenSqliteFolderCommand = new RelayCommand(_ => OpenSqliteFolder());
 
@@ -173,8 +174,8 @@ namespace GoodGovernanceApp.ViewModels
         // ── Database Mode ────────────────────────────────────────────────────
         public string DatabaseMode { get; set; } = "Remote";
 
-        // ── Cloud Sync (Hostinger) Fields ────────────────────────────────────
-        private string _remoteServer = "193.203.175.157";
+        // ── Remote GGMS Database Fields (194.59.164.58, main online DB) ─────
+        private string _remoteServer = "194.59.164.58";
         public string RemoteServer
         {
             get => _remoteServer;
@@ -188,21 +189,21 @@ namespace GoodGovernanceApp.ViewModels
             set { _remotePort = value; OnPropertyChanged(); }
         }
 
-        private string _remoteDatabase = "u518908950_ggms";
+        private string _remoteDatabase = "u621755393_ggms";
         public string RemoteDatabase
         {
             get => _remoteDatabase;
             set { _remoteDatabase = value; OnPropertyChanged(); }
         }
 
-        private string _remoteUser = "u518908950_ggms";
+        private string _remoteUser = "u621755393_ggms_user";
         public string RemoteUser
         {
             get => _remoteUser;
             set { _remoteUser = value; OnPropertyChanged(); }
         }
 
-        private string _remotePassword = string.Empty;
+        private string _remotePassword = "Ggms@2026";
         public string RemotePassword
         {
             get => _remotePassword;
@@ -226,7 +227,7 @@ namespace GoodGovernanceApp.ViewModels
             set { _networkPort = value; OnPropertyChanged(); }
         }
 
-        private string _networkDatabase = "agms_db";
+        private string _networkDatabase = "ggms_db";
         public string NetworkDatabase
         {
             get => _networkDatabase;
@@ -249,6 +250,45 @@ namespace GoodGovernanceApp.ViewModels
 
         public string NetworkConnectionString => BuildNetworkConnStr();
 
+        // ── CRS Database (LAN) Fields — prefilled, editable ────────────────
+        // Second LAN connection on the same office server, separate database.
+        private string _crsServer = "192.168.0.47";
+        public string CrsServer
+        {
+            get => _crsServer;
+            set { _crsServer = value; OnPropertyChanged(); }
+        }
+
+        private string _crsPort = "3306";
+        public string CrsPort
+        {
+            get => _crsPort;
+            set { _crsPort = value; OnPropertyChanged(); }
+        }
+
+        private string _crsDatabase = "crs_db";
+        public string CrsDatabase
+        {
+            get => _crsDatabase;
+            set { _crsDatabase = value; OnPropertyChanged(); }
+        }
+
+        private string _crsUser = "root";
+        public string CrsUser
+        {
+            get => _crsUser;
+            set { _crsUser = value; OnPropertyChanged(); }
+        }
+
+        private string _crsPassword = "network@2026";
+        public string CrsPassword
+        {
+            get => _crsPassword;
+            set { _crsPassword = value; OnPropertyChanged(); }
+        }
+
+        public string CrsConnectionString => BuildCrsConnStr();
+
         // ── Status ───────────────────────────────────────────────────────────
         private string _statusMessage = string.Empty;
         public string StatusMessage
@@ -269,6 +309,13 @@ namespace GoodGovernanceApp.ViewModels
         {
             get => _networkTestResult;
             set { _networkTestResult = value; OnPropertyChanged(); }
+        }
+
+        private string _crsTestResult = string.Empty;
+        public string CrsTestResult
+        {
+            get => _crsTestResult;
+            set { _crsTestResult = value; OnPropertyChanged(); }
         }
 
         private bool _isTesting;
@@ -350,6 +397,7 @@ namespace GoodGovernanceApp.ViewModels
         public ICommand TestThreeCommand { get; }
         public ICommand TestCloudCommand { get; }
         public ICommand TestNetworkCommand { get; }
+        public ICommand TestCrsCommand { get; }
         public ICommand SaveSettingsCommand { get; }
         public ICommand SaveBackupSettingsCommand { get; }
         public ICommand FullBackupCommand { get; }
@@ -395,6 +443,23 @@ namespace GoodGovernanceApp.ViewModels
             return builder.ConnectionString;
         }
 
+        public string BuildCrsConnStr()
+        {
+            var builder = new MySqlConnectionStringBuilder
+            {
+                Server = CrsServer,
+                Port = uint.TryParse(CrsPort, out var p) ? p : 3306,
+                Database = CrsDatabase,
+                UserID = CrsUser,
+                Password = CrsPassword,
+                AllowZeroDateTime = true,
+                ConvertZeroDateTime = true,
+                ConnectionTimeout = 15,
+                SslMode = MySqlSslMode.None
+            };
+            return builder.ConnectionString;
+        }
+
         private string ActiveGgmsConnStr => BuildRemoteConnStr();
 
         // ── Connection Test ───────────────────────────────────────────────────
@@ -404,6 +469,7 @@ namespace GoodGovernanceApp.ViewModels
             SqliteTestResult = "Testing Local SQLite...";
             GgmsTestResult = "Testing Online...";
             NetworkTestResult = "Testing Network (LAN)...";
+            CrsTestResult = "Testing CRS Database...";
 
             // 1. Test Local SQLite DB
             var sqliteTask = Task.Run(async () =>
@@ -425,42 +491,51 @@ namespace GoodGovernanceApp.ViewModels
                 }
             });
 
-            // 2. Test Cloud Sync (MySQL)
+            // 2. Test Remote GGMS (MySQL)
             var ggmsTask = TestConnectionAsync(ActiveGgmsConnStr);
 
-            // 3. Test Network (Office LAN MySQL)
+            // 3. Test Network (Remote MySQL — GGMS)
             var networkTask = TestConnectionAsync(BuildNetworkConnStr());
 
-            await Task.WhenAll(sqliteTask, ggmsTask, networkTask);
+            // 4. Test CRS Database (Office LAN MySQL — CRS)
+            var crsTask = TestConnectionAsync(BuildCrsConnStr());
+
+            await Task.WhenAll(sqliteTask, ggmsTask, networkTask, crsTask);
 
             var (sqliteOk, sqliteMsg) = sqliteTask.Result;
             var (ggmsOk, ggmsMsg) = ggmsTask.Result;
             var (networkOk, networkMsg) = networkTask.Result;
+            var (crsOk, crsMsg) = crsTask.Result;
 
             SqliteTestResult = sqliteOk ? $"✅ Local SQLite: Connected ({sqliteMsg})" : $"❌ Local SQLite: {sqliteMsg}";
             GgmsTestResult = ggmsOk ? "✅ Online: Connected" : $"⚠ Online: Offline / Unreachable ({ggmsMsg})";
             NetworkTestResult = networkOk ? "✅ Network (LAN): Connected" : $"⚠ Network (LAN): Offline / Unreachable ({networkMsg})";
+            CrsTestResult = crsOk ? "✅ CRS Database: Connected" : $"⚠ CRS Database: Offline / Unreachable ({crsMsg})";
             IsTesting = false;
         }
 
-        // ── Test 2 MySQL connections (Online + Network LAN, no SQLite) ──
+        // ── Test 3 MySQL connections (Online + Network LAN GGMS + CRS, no SQLite) ──
         // Used by the Database Connection Settings popup with tab navigation.
         private async Task ExecuteTestThree()
         {
             IsTesting = true;
             GgmsTestResult = "Testing Online...";
             NetworkTestResult = "Testing Network (LAN)...";
+            CrsTestResult = "Testing CRS Database...";
 
             var ggmsTask = TestConnectionAsync(ActiveGgmsConnStr);
             var networkTask = TestConnectionAsync(BuildNetworkConnStr());
+            var crsTask = TestConnectionAsync(BuildCrsConnStr());
 
-            await Task.WhenAll(ggmsTask, networkTask);
+            await Task.WhenAll(ggmsTask, networkTask, crsTask);
 
             var (ggmsOk, ggmsMsg) = ggmsTask.Result;
             var (networkOk, networkMsg) = networkTask.Result;
+            var (crsOk, crsMsg) = crsTask.Result;
 
             GgmsTestResult = ggmsOk ? "✅ Online: Connected" : $"⚠ Online: Offline / Unreachable ({ggmsMsg})";
             NetworkTestResult = networkOk ? "✅ Network (LAN): Connected" : $"⚠ Network (LAN): Offline / Unreachable ({networkMsg})";
+            CrsTestResult = crsOk ? "✅ CRS Database: Connected" : $"⚠ CRS Database: Offline / Unreachable ({crsMsg})";
             IsTesting = false;
         }
 
@@ -480,6 +555,15 @@ namespace GoodGovernanceApp.ViewModels
             NetworkTestResult = "Testing Network (LAN)...";
             var (ok, msg) = await TestConnectionAsync(BuildNetworkConnStr());
             NetworkTestResult = ok ? "✅ Network (LAN): Connected" : $"⚠ Network (LAN): Offline / Unreachable ({msg})";
+            IsTesting = false;
+        }
+
+        private async Task ExecuteTestCrs()
+        {
+            IsTesting = true;
+            CrsTestResult = "Testing CRS Database...";
+            var (ok, msg) = await TestConnectionAsync(BuildCrsConnStr());
+            CrsTestResult = ok ? "✅ CRS Database: Connected" : $"⚠ CRS Database: Offline / Unreachable ({msg})";
             IsTesting = false;
         }
 
@@ -514,26 +598,26 @@ namespace GoodGovernanceApp.ViewModels
             {
                 // Read Remote Connection string from appsettings.json and split into fields
                 string rawRemote = _config.GetConnectionString("RemoteConnection") 
-                    ?? "Server=193.203.175.157;Port=3306;Database=u518908950_ggms;User=u518908950_ggms;Password=Sulop@2025;AllowZeroDateTime=True;ConvertZeroDateTime=True;";
+                    ?? "Server=194.59.164.58;Port=3306;Database=u621755393_ggms;User=u621755393_ggms_user;Password=Ggms@2026;AllowZeroDateTime=True;ConvertZeroDateTime=True;";
 
                 if (!string.IsNullOrWhiteSpace(rawRemote))
                 {
                     try
                     {
                         var b = new MySqlConnectionStringBuilder(rawRemote);
-                        RemoteServer = !string.IsNullOrWhiteSpace(b.Server) ? b.Server : "193.203.175.157";
+                        RemoteServer = !string.IsNullOrWhiteSpace(b.Server) ? b.Server : "194.59.164.58";
                         RemotePort = b.Port > 0 ? b.Port.ToString() : "3306";
-                        RemoteDatabase = !string.IsNullOrWhiteSpace(b.Database) ? b.Database : "u518908950_ggms";
-                        RemoteUser = !string.IsNullOrWhiteSpace(b.UserID) ? b.UserID : "u518908950_ggms";
+                        RemoteDatabase = !string.IsNullOrWhiteSpace(b.Database) ? b.Database : "u621755393_ggms";
+                        RemoteUser = !string.IsNullOrWhiteSpace(b.UserID) ? b.UserID : "u621755393_ggms_user";
                         RemotePassword = b.Password ?? "";
                     }
                     catch
                     {
-                        RemoteServer = "193.203.175.157";
+                        RemoteServer = "194.59.164.58";
                         RemotePort = "3306";
-                        RemoteDatabase = "u518908950_ggms";
-                        RemoteUser = "u518908950_ggms";
-                        RemotePassword = "Sulop@2025";
+                        RemoteDatabase = "u621755393_ggms";
+                        RemoteUser = "u621755393_ggms_user";
+                        RemotePassword = "Ggms@2026";
                     }
                 }
 
@@ -547,7 +631,7 @@ namespace GoodGovernanceApp.ViewModels
                         var nb = new MySqlConnectionStringBuilder(rawNetwork);
                         NetworkServer = !string.IsNullOrWhiteSpace(nb.Server) ? nb.Server : "192.168.0.47";
                         NetworkPort = nb.Port > 0 ? nb.Port.ToString() : "3306";
-                        NetworkDatabase = !string.IsNullOrWhiteSpace(nb.Database) ? nb.Database : "agms_db";
+                        NetworkDatabase = !string.IsNullOrWhiteSpace(nb.Database) ? nb.Database : "ggms_db";
                         NetworkUser = !string.IsNullOrWhiteSpace(nb.UserID) ? nb.UserID : "root";
                         string nbPass = nb.Password ?? "";
                         NetworkPassword = !string.IsNullOrWhiteSpace(nbPass) ? nbPass : "network@2026";
@@ -556,9 +640,32 @@ namespace GoodGovernanceApp.ViewModels
                     {
                         NetworkServer = "192.168.0.47";
                         NetworkPort = "3306";
-                        NetworkDatabase = "agms_db";
+                        NetworkDatabase = "ggms_db";
                         NetworkUser = "root";
                         NetworkPassword = "network@2026";
+                    }
+                }
+
+                // Load CRS Database (office LAN) fields — second editable LAN connection
+                string rawCrsServer = _config["CrsConnection:Server"] ?? "";
+                if (!string.IsNullOrWhiteSpace(rawCrsServer) || !string.IsNullOrWhiteSpace(_config["CrsConnection:Database"]))
+                {
+                    try
+                    {
+                        CrsServer = !string.IsNullOrWhiteSpace(_config["CrsConnection:Server"]) ? _config["CrsConnection:Server"]! : "192.168.0.47";
+                        CrsPort = !string.IsNullOrWhiteSpace(_config["CrsConnection:Port"]) ? _config["CrsConnection:Port"]! : "3306";
+                        CrsDatabase = !string.IsNullOrWhiteSpace(_config["CrsConnection:Database"]) ? _config["CrsConnection:Database"]! : "crs_db";
+                        CrsUser = !string.IsNullOrWhiteSpace(_config["CrsConnection:User"]) ? _config["CrsConnection:User"]! : "root";
+                        string crsPass = _config["CrsConnection:Password"] ?? "";
+                        CrsPassword = !string.IsNullOrWhiteSpace(crsPass) ? crsPass : "network@2026";
+                    }
+                    catch
+                    {
+                        CrsServer = "192.168.0.47";
+                        CrsPort = "3306";
+                        CrsDatabase = "crs_db";
+                        CrsUser = "root";
+                        CrsPassword = "network@2026";
                     }
                 }
             }
@@ -589,10 +696,10 @@ namespace GoodGovernanceApp.ViewModels
                 IsTesting = false;
 
                 // Write updated settings to appsettings.json (single source of truth)
-                // Only 2 connections: Online (Remote) + Network (LAN)
+                // 3 connections: Online (Remote) + Network (LAN GGMS) + CRS Database
                 _databaseConfig.SaveToAppsettings(
                     DatabaseMode, ActiveGgmsConnStr,
-                    BuildNetworkConnStr());
+                    BuildNetworkConnStr(), BuildCrsConnStr());
 
                 RefreshSqliteInfo();
                 StatusMessage = "Settings saved successfully. Please restart the application.";
