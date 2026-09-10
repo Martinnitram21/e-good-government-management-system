@@ -13,7 +13,7 @@ public interface IDatabaseConfig
     string ConnectionString { get; }
     string NetworkConnectionString { get; }
     string CrsConnectionString { get; }
-    void SaveToAppsettings(string mode, string ggmsConnStr, string networkConnStr = "");
+    void SaveToAppsettings(string mode, string ggmsConnStr, string networkConnStr = "", string crsConnStr = "");
 }
 
 public class DatabaseConfig : IDatabaseConfig
@@ -31,7 +31,7 @@ public class DatabaseConfig : IDatabaseConfig
         {
             return _config.GetConnectionString("RemoteConnection")
                 ?? _config.GetConnectionString("LocalConnection")
-                ?? "Server=193.203.175.157;Port=3306;Database=u518908950_ggms;User=u518908950_ggms;Password=Sulop@2025;AllowZeroDateTime=True;ConvertZeroDateTime=True;";
+                ?? "Server=194.59.164.58;Port=3306;Database=u621755393_ggms;User=u621755393_ggms_user;Password=Ggms@2026;AllowZeroDateTime=True;ConvertZeroDateTime=True;";
         }
     }
 
@@ -42,7 +42,7 @@ public class DatabaseConfig : IDatabaseConfig
             // Prefilled office-network (LAN) database; editable in Settings.
             return _config.GetConnectionString("NetworkConnection")
                 ?? _config.GetConnectionString("LanConnection")
-                ?? "Server=192.168.0.47;Port=3306;Database=agms_db;User=root;Password=network@2026;AllowZeroDateTime=True;ConvertZeroDateTime=True;";
+                ?? "Server=192.168.0.47;Port=3306;Database=ggms_db;User=root;Password=network@2026;AllowZeroDateTime=True;ConvertZeroDateTime=True;";
         }
     }
 
@@ -52,11 +52,11 @@ public class DatabaseConfig : IDatabaseConfig
         {
             var builder = new MySqlConnectionStringBuilder
             {
-                Server = _config["CrsConnection:Server"] ?? "193.203.175.157",
+                Server = _config["CrsConnection:Server"] ?? "192.168.0.47",
                 Port = uint.TryParse(_config["CrsConnection:Port"], out var p) ? p : 3306,
-                Database = _config["CrsConnection:Database"] ?? "u518908950_crs",
-                UserID = _config["CrsConnection:User"] ?? "u518908950_crs",
-                Password = _config["CrsConnection:Password"] ?? "Sulop@2025",
+                Database = _config["CrsConnection:Database"] ?? "crs_db",
+                UserID = _config["CrsConnection:User"] ?? "root",
+                Password = _config["CrsConnection:Password"] ?? "network@2026",
                 AllowZeroDateTime = true,
                 ConvertZeroDateTime = true,
                 ConnectionTimeout = 15,
@@ -68,7 +68,7 @@ public class DatabaseConfig : IDatabaseConfig
 
     public void SaveToAppsettings(
         string mode, string ggmsConnStr,
-        string networkConnStr = "")
+        string networkConnStr = "", string crsConnStr = "")
     {
         string appDataFolder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "GoodGovernanceApp");
         Directory.CreateDirectory(appDataFolder);
@@ -101,6 +101,23 @@ public class DatabaseConfig : IDatabaseConfig
         root["ConnectionStrings"]!["RemoteConnection"] = ggmsConnStr;
         if (!string.IsNullOrWhiteSpace(networkConnStr))
             root["ConnectionStrings"]!["NetworkConnection"] = networkConnStr;
+        if (!string.IsNullOrWhiteSpace(crsConnStr))
+        {
+            // CRS is stored as a section (Server/Port/Database/User/Password),
+            // not a connection string — split it so connectivity + services keep working.
+            try
+            {
+                var cb = new MySqlConnectionStringBuilder(crsConnStr);
+                if (!root.ContainsKey("CrsConnection") || root["CrsConnection"] is not JsonObject)
+                    root["CrsConnection"] = new JsonObject();
+                root["CrsConnection"]!["Server"] = string.IsNullOrWhiteSpace(cb.Server) ? "192.168.0.47" : cb.Server;
+                root["CrsConnection"]!["Port"] = cb.Port > 0 ? cb.Port.ToString() : "3306";
+                root["CrsConnection"]!["Database"] = string.IsNullOrWhiteSpace(cb.Database) ? "crs_db" : cb.Database;
+                root["CrsConnection"]!["User"] = string.IsNullOrWhiteSpace(cb.UserID) ? "root" : cb.UserID;
+                root["CrsConnection"]!["Password"] = cb.Password ?? "network@2026";
+            }
+            catch { }
+        }
 
         var options = new JsonSerializerOptions { WriteIndented = true };
         ConfigFileHelper.AtomicWriteJson(path, root.ToJsonString(options));
