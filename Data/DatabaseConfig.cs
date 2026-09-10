@@ -42,7 +42,7 @@ public class DatabaseConfig : IDatabaseConfig
             // Prefilled office-network (LAN) database; editable in Settings.
             return _config.GetConnectionString("NetworkConnection")
                 ?? _config.GetConnectionString("LanConnection")
-                ?? "Server=192.168.0.42;Port=3306;Database=agms_db;User=root;Password=network@2026;AllowZeroDateTime=True;ConvertZeroDateTime=True;";
+                ?? "Server=192.168.0.47;Port=3306;Database=agms_db;User=root;Password=network@2026;AllowZeroDateTime=True;ConvertZeroDateTime=True;";
         }
     }
 
