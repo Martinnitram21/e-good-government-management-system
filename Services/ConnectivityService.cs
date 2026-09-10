@@ -81,12 +81,12 @@ public class ConnectivityService : IConnectivityService
     {
         _isInternetAvailable = NetworkInterface.GetIsNetworkAvailable();
 
-        var hostingerTask = CheckHostingerAsync();
+        var remoteTask = CheckRemoteAsync();
         var networkTask = CheckNetworkAsync();
         var crsTask = CheckCrsAsync();
-        await Task.WhenAll(hostingerTask, networkTask, crsTask);
+        await Task.WhenAll(remoteTask, networkTask, crsTask);
 
-        _isOnline = hostingerTask.Result;
+        _isOnline = remoteTask.Result;
         _isNetworkOnline = networkTask.Result;
         _isCrsOnline = crsTask.Result;
 
@@ -94,8 +94,8 @@ public class ConnectivityService : IConnectivityService
         return _isOnline;
     }
 
-    // ── Hostinger GGMS ────────────────────────────────────────────────────────
-    private async Task<bool> CheckHostingerAsync()
+    // ── Remote GGMS (194.59.164.58, main online DB) ──────────────────────────
+    private async Task<bool> CheckRemoteAsync()
     {
         try
         {
@@ -103,7 +103,7 @@ public class ConnectivityService : IConnectivityService
             if (string.IsNullOrWhiteSpace(connStr))
                 return false;
 
-            string host = "193.203.175.157";
+            string host = "194.59.164.58";
             int port = 3306;
 
             try
@@ -191,7 +191,7 @@ public class ConnectivityService : IConnectivityService
             if (string.IsNullOrWhiteSpace(connStr))
                 return false;
 
-            string host = "193.203.175.157";
+            string host = "192.168.0.47";
             int port = 3306;
 
             try
