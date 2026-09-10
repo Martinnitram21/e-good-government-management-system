@@ -212,7 +212,7 @@ namespace GoodGovernanceApp.ViewModels
         public string RemoteConnectionString => BuildRemoteConnStr();
 
         // ── Network (Office LAN) Fields — prefilled ──────────────────────────
-        private string _networkServer = "192.168.0.42";
+        private string _networkServer = "192.168.0.47";
         public string NetworkServer
         {
             get => _networkServer;
@@ -545,7 +545,7 @@ namespace GoodGovernanceApp.ViewModels
                     try
                     {
                         var nb = new MySqlConnectionStringBuilder(rawNetwork);
-                        NetworkServer = !string.IsNullOrWhiteSpace(nb.Server) ? nb.Server : "192.168.0.42";
+                        NetworkServer = !string.IsNullOrWhiteSpace(nb.Server) ? nb.Server : "192.168.0.47";
                         NetworkPort = nb.Port > 0 ? nb.Port.ToString() : "3306";
                         NetworkDatabase = !string.IsNullOrWhiteSpace(nb.Database) ? nb.Database : "agms_db";
                         NetworkUser = !string.IsNullOrWhiteSpace(nb.UserID) ? nb.UserID : "root";
@@ -554,7 +554,7 @@ namespace GoodGovernanceApp.ViewModels
                     }
                     catch
                     {
-                        NetworkServer = "192.168.0.42";
+                        NetworkServer = "192.168.0.47";
                         NetworkPort = "3306";
                         NetworkDatabase = "agms_db";
                         NetworkUser = "root";
