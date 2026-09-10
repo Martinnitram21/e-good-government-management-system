@@ -65,7 +65,7 @@ public class User
     // Department/Office linkage
     public virtual Office? Office { get; set; }
 
-    // NOTE: department_role_id does not exist in the Hostinger database schema.
+    // NOTE: department_role_id does not exist in the remote database schema.
     // Marked as NotMapped to prevent EF from querying a non-existent column.
     [NotMapped]
     public int? DepartmentRoleId { get; set; }
