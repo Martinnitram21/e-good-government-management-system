@@ -2,6 +2,7 @@ using System;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Collections.Generic;
+using System.Data.Common;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.Extensions.DependencyInjection;
@@ -21,13 +22,148 @@ public interface ISyncService
 
 public class SyncService : ISyncService
 {
+    private static bool UsesDirectRemoteDatabase => true;
     private bool _isSyncing = false;
+    private readonly SemaphoreSlim _syncGate = new(1, 1);
     public event Action<bool>?   OnSyncStatusChanged;
     public event Action<string>? OnSyncProgress;
     public event Action<List<string>>? OnSyncErrorsCollected;
 
     private readonly IConnectivityService _connectivityService;
     private readonly IServiceScopeFactory _scopeFactory;
+
+    private sealed record ForeignKeyRule(
+        string PropertyName,
+        string PrincipalTable,
+        string PrincipalKeyColumn);
+
+    private static readonly IReadOnlyDictionary<Type, ForeignKeyRule[]> ForeignKeyRules =
+        new Dictionary<Type, ForeignKeyRule[]>
+        {
+            [typeof(User)] =
+            [
+                new(nameof(User.OfficeId), "tbl_offices", "id")
+            ],
+            [typeof(MasterBudget)] =
+            [
+                new(nameof(MasterBudget.CreatedById), "users", "id")
+            ],
+            [typeof(ProgramProvision)] =
+            [
+                new(nameof(ProgramProvision.OfficeId), "tbl_offices", "id")
+            ],
+            [typeof(BudgetAllocation)] =
+            [
+                new(nameof(BudgetAllocation.MasterBudgetId), "master_budget", "id"),
+                new(nameof(BudgetAllocation.OfficeId), "tbl_offices", "id")
+            ],
+            [typeof(ProjectDetail)] =
+            [
+                new(nameof(ProjectDetail.MasterBudgetId), "master_budget", "id")
+            ],
+            [typeof(TblTransaction)] =
+            [
+                new(nameof(TblTransaction.ProgramId), "tbl_program_provision", "id"),
+                new(nameof(TblTransaction.BudgetAllocationId), "officeallocations", "Id"),
+                new(nameof(TblTransaction.DistributedById), "users", "id"),
+                new(nameof(TblTransaction.UserId), "users", "id"),
+                new(nameof(TblTransaction.OfficeId), "tbl_offices", "id"),
+                new(nameof(TblTransaction.ServicesId), "tbl_services", "services_id")
+            ]
+        };
+
+    private sealed class ForeignKeyTranslator
+    {
+        private readonly DbConnection _localConnection;
+        private readonly DbConnection _cloudConnection;
+        private readonly Dictionary<string, object> _cache = new(StringComparer.OrdinalIgnoreCase);
+
+        public ForeignKeyTranslator(DbConnection localConnection, DbConnection cloudConnection)
+        {
+            _localConnection = localConnection;
+            _cloudConnection = cloudConnection;
+        }
+
+        public async Task<IReadOnlyDictionary<string, object?>> GetOverridesAsync<T>(
+            T record,
+            bool sourceIsMySql,
+            List<string> errors) where T : class
+        {
+            var overrides = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
+            if (!ForeignKeyRules.TryGetValue(typeof(T), out var rules))
+                return overrides;
+
+            foreach (var rule in rules)
+            {
+                var property = typeof(T).GetProperty(rule.PropertyName);
+                if (property == null)
+                    continue;
+
+                var sourceValue = property.GetValue(record);
+                if (sourceValue == null || sourceValue == DBNull.Value)
+                {
+                    overrides[rule.PropertyName] = DBNull.Value;
+                    continue;
+                }
+
+                var translated = await TranslateAsync(
+                    sourceValue,
+                    rule.PrincipalTable,
+                    rule.PrincipalKeyColumn,
+                    sourceIsMySql);
+
+                if (translated == DBNull.Value)
+                {
+                    AddSyncError(errors,
+                        $"{typeof(T).Name}.{rule.PropertyName}: referenced {rule.PrincipalTable} record is missing; relationship stored as NULL.");
+                }
+
+                overrides[rule.PropertyName] = translated;
+            }
+
+            return overrides;
+        }
+
+        private async Task<object> TranslateAsync(
+            object sourceKey,
+            string principalTable,
+            string principalKeyColumn,
+            bool sourceIsMySql)
+        {
+            string cacheKey = $"{sourceIsMySql}|{principalTable}|{sourceKey}";
+            if (_cache.TryGetValue(cacheKey, out var cached))
+                return cached;
+
+            var sourceConnection = sourceIsMySql ? _cloudConnection : _localConnection;
+            var targetConnection = sourceIsMySql ? _localConnection : _cloudConnection;
+
+            string sourceQuote = sourceIsMySql ? "`" : "\"";
+            string targetQuote = sourceIsMySql ? "\"" : "`";
+            string targetCast = sourceIsMySql ? "TEXT" : "CHAR";
+
+            using var syncIdCommand = sourceConnection.CreateCommand();
+            syncIdCommand.CommandText =
+                $"SELECT {sourceQuote}SyncId{sourceQuote} FROM {sourceQuote}{principalTable}{sourceQuote} " +
+                $"WHERE {sourceQuote}{principalKeyColumn}{sourceQuote} = @sourceKey LIMIT 1";
+            AddParameter(syncIdCommand, "@sourceKey", sourceKey);
+            var syncIdValue = await syncIdCommand.ExecuteScalarAsync();
+            if (syncIdValue == null || syncIdValue == DBNull.Value || string.IsNullOrWhiteSpace(syncIdValue.ToString()))
+            {
+                _cache[cacheKey] = DBNull.Value;
+                return DBNull.Value;
+            }
+
+            using var targetKeyCommand = targetConnection.CreateCommand();
+            targetKeyCommand.CommandText =
+                $"SELECT {targetQuote}{principalKeyColumn}{targetQuote} FROM {targetQuote}{principalTable}{targetQuote} " +
+                $"WHERE LOWER(CAST({targetQuote}SyncId{targetQuote} AS {targetCast})) = @syncId LIMIT 1";
+            AddParameter(targetKeyCommand, "@syncId", syncIdValue.ToString()!.ToLowerInvariant());
+            var targetKey = await targetKeyCommand.ExecuteScalarAsync();
+            var result = targetKey == null || targetKey == DBNull.Value ? DBNull.Value : targetKey;
+            _cache[cacheKey] = result;
+            return result;
+        }
+    }
 
     public SyncService(IConnectivityService connectivityService, IServiceScopeFactory scopeFactory)
     {
@@ -38,6 +174,12 @@ public class SyncService : ISyncService
 
     public void StartAutoSync()
     {
+        if (UsesDirectRemoteDatabase)
+        {
+            OnSyncProgress?.Invoke("Direct remote database active");
+            return;
+        }
+
         _ = Task.Run(async () =>
         {
             // Initial sync on startup as soon as network is ready
@@ -67,7 +209,13 @@ public class SyncService : ISyncService
 
     public async Task SyncNowAsync()
     {
-        if (_isSyncing) return;
+        if (UsesDirectRemoteDatabase)
+        {
+            OnSyncProgress?.Invoke("Direct remote database active");
+            return;
+        }
+
+        if (!await _syncGate.WaitAsync(0)) return;
 
         _isSyncing = true;
         OnSyncStatusChanged?.Invoke(true);
@@ -90,14 +238,23 @@ public class SyncService : ISyncService
             OnSyncProgress?.Invoke("Preparing cloud schema...");
             await MigrateCloudTablesAsync(cloudDb);
 
-            // ── Disable Foreign Key checks globally during sync ──
             var localConn = localDb.Database.GetDbConnection();
             if (localConn.State != System.Data.ConnectionState.Open) await localConn.OpenAsync();
-            using (var cmd = localConn.CreateCommand()) { cmd.CommandText = "PRAGMA foreign_keys = OFF;"; await cmd.ExecuteNonQueryAsync(); }
 
             var cloudConn = cloudDb.Database.GetDbConnection();
             if (cloudConn.State != System.Data.ConnectionState.Open) await cloudConn.OpenAsync();
-            using (var cmd = cloudConn.CreateCommand()) { cmd.CommandText = "SET FOREIGN_KEY_CHECKS = 0;"; await cmd.ExecuteNonQueryAsync(); }
+
+            // Repair legacy orphaned references before enforcing relationships.
+            await RepairOrphanedForeignKeysAsync(localConn, isMySql: false, syncErrors);
+            await RepairOrphanedForeignKeysAsync(cloudConn, isMySql: true, syncErrors);
+
+            using (var cmd = localConn.CreateCommand())
+            {
+                cmd.CommandText = "PRAGMA foreign_keys = ON;";
+                await cmd.ExecuteNonQueryAsync();
+            }
+
+            var foreignKeyTranslator = new ForeignKeyTranslator(localConn, cloudConn);
 
             // ── Align Superadmin SyncId to prevent duplicate PK errors ──
             var localAdmin = await localDb.Users.FirstOrDefaultAsync(u => u.Name == "superadmin");
@@ -108,37 +265,34 @@ public class SyncService : ISyncService
                 await localDb.SaveChangesAsync();
             }
 
-            OnSyncProgress?.Invoke("Syncing users...");
-            await SyncTableAsync(localDb, cloudDb, localDb.Users, cloudDb.Users);
-
             OnSyncProgress?.Invoke("Syncing offices...");
-            await SyncTableAsync(localDb, cloudDb, localDb.Offices, cloudDb.Offices);
+            await SyncTableAsync(localDb, cloudDb, localDb.Offices, cloudDb.Offices, foreignKeyTranslator, syncErrors);
+
+            OnSyncProgress?.Invoke("Syncing users...");
+            await SyncTableAsync(localDb, cloudDb, localDb.Users, cloudDb.Users, foreignKeyTranslator, syncErrors);
 
             OnSyncProgress?.Invoke("Syncing master budgets...");
-            await SyncTableAsync(localDb, cloudDb, localDb.MasterBudgets, cloudDb.MasterBudgets);
+            await SyncTableAsync(localDb, cloudDb, localDb.MasterBudgets, cloudDb.MasterBudgets, foreignKeyTranslator, syncErrors);
 
             OnSyncProgress?.Invoke("Syncing program provisions...");
-            await SyncTableAsync(localDb, cloudDb, localDb.ProgramProvisions, cloudDb.ProgramProvisions);
+            await SyncTableAsync(localDb, cloudDb, localDb.ProgramProvisions, cloudDb.ProgramProvisions, foreignKeyTranslator, syncErrors);
 
             OnSyncProgress?.Invoke("Syncing budget allocations...");
-            await SyncTableAsync(localDb, cloudDb, localDb.BudgetAllocations, cloudDb.BudgetAllocations);
+            await SyncTableAsync(localDb, cloudDb, localDb.BudgetAllocations, cloudDb.BudgetAllocations, foreignKeyTranslator, syncErrors);
 
             OnSyncProgress?.Invoke("Syncing services...");
-            await SyncTableAsync(localDb, cloudDb, localDb.TblServices, cloudDb.TblServices);
-
-            OnSyncProgress?.Invoke("Syncing yearly budgets...");
-            await SyncTableAsync(localDb, cloudDb, localDb.MasterBudgets, cloudDb.MasterBudgets);
+            await SyncTableAsync(localDb, cloudDb, localDb.TblServices, cloudDb.TblServices, foreignKeyTranslator, syncErrors);
 
 
             OnSyncProgress?.Invoke("Syncing project details...");
-            await SyncTableAsync(localDb, cloudDb, localDb.ProjectDetails, cloudDb.ProjectDetails);
+            await SyncTableAsync(localDb, cloudDb, localDb.ProjectDetails, cloudDb.ProjectDetails, foreignKeyTranslator, syncErrors);
 
 
             OnSyncProgress?.Invoke("Syncing office transactions...");
-            await SyncTableAsync(localDb, cloudDb, localDb.TblTransactions, cloudDb.TblTransactions, preservePk: false);
+            await SyncTableAsync(localDb, cloudDb, localDb.TblTransactions, cloudDb.TblTransactions, foreignKeyTranslator, syncErrors);
 
             OnSyncProgress?.Invoke("Syncing consolidated transactions...");
-            await SyncTableAsync(localDb, cloudDb, localDb.ConsolidatedTransactions, cloudDb.ConsolidatedTransactions, preservePk: false);
+            await SyncTableAsync(localDb, cloudDb, localDb.ConsolidatedTransactions, cloudDb.ConsolidatedTransactions, foreignKeyTranslator, syncErrors);
 
             OnSyncProgress?.Invoke(syncErrors.Count == 0 ? "✔ Synced successfully" : $"⚠ Synced with {syncErrors.Count} error(s)");
         }
@@ -156,6 +310,7 @@ public class SyncService : ISyncService
             OnSyncErrorsCollected?.Invoke(syncErrors);
             WriteSyncLog(syncErrors);
             _ = Task.Delay(15000).ContinueWith(_ => OnSyncProgress?.Invoke("Idle"));
+            _syncGate.Release();
         }
     }
 
@@ -240,7 +395,8 @@ public class SyncService : ISyncService
         CloudDbContext cloudDb,
         DbSet<T>      localSet,
         DbSet<T>      cloudSet,
-        bool          preservePk = true) where T : class
+        ForeignKeyTranslator foreignKeyTranslator,
+        List<string> syncErrors) where T : class
     {
         var syncIdProp  = typeof(T).GetProperty("SyncId");
         var updatedProp = typeof(T).GetProperty("UpdatedAt");
@@ -306,13 +462,15 @@ public class SyncService : ISyncService
 
             if (!cloudById.TryGetValue(syncId, out var cloudMatch))
             {
-                // INSERT via raw SQL to preserve explicit integer PKs
                 try
                 {
-                    await RawSqlInsertAsync(cloudConn, cloudTableName, cloudScalars, local, isMySql: true, skipCols: preservePk ? null : cloudPkNames);
+                    var overrides = await foreignKeyTranslator.GetOverridesAsync(local, sourceIsMySql: false, syncErrors);
+                    await RawSqlInsertAsync(cloudConn, cloudTableName, cloudScalars, local,
+                        isMySql: true, skipCols: cloudPkNames, overrides);
                 }
                 catch (Exception ex)
                 {
+                    AddSyncError(syncErrors, $"Cloud insert failed ({typeof(T).Name}): {ex.Message}");
                     System.Diagnostics.Debug.WriteLine($"[SyncService] Cloud insert failed ({typeof(T).Name}): {ex.Message}");
                 }
             }
@@ -322,7 +480,18 @@ public class SyncService : ISyncService
                 var cloudAt = (DateTime?)updatedProp.GetValue(cloudMatch) ?? DateTime.MinValue;
                 var localTime = localAt ?? DateTime.MinValue;
                 if (localTime > cloudAt)
-                    await RawSqlUpdateAsync(cloudConn, cloudTableName, cloudScalars, cloudPkNames, incoming: local, existing: cloudMatch, isMySql: true);
+                {
+                    try
+                    {
+                        var overrides = await foreignKeyTranslator.GetOverridesAsync(local, sourceIsMySql: false, syncErrors);
+                        await RawSqlUpdateAsync(cloudConn, cloudTableName, cloudScalars, cloudPkNames,
+                            incoming: local, existing: cloudMatch, isMySql: true, overrides);
+                    }
+                    catch (Exception ex)
+                    {
+                        AddSyncError(syncErrors, $"Cloud update failed ({typeof(T).Name}): {ex.Message}");
+                    }
+                }
             }
         }
 
@@ -351,15 +520,16 @@ public class SyncService : ISyncService
 
             if (!localById.TryGetValue(syncId, out var localMatch))
             {
-                // INSERT via raw SQL to preserve explicit integer PKs
                 try
                 {
-                    await RawSqlInsertAsync(localConn, localTableName, localScalars, cloud, isMySql: false, skipCols: preservePk ? null : localPkNames);
+                    var overrides = await foreignKeyTranslator.GetOverridesAsync(cloud, sourceIsMySql: true, syncErrors);
+                    await RawSqlInsertAsync(localConn, localTableName, localScalars, cloud,
+                        isMySql: false, skipCols: localPkNames, overrides);
                 }
                 catch (Exception ex)
                 {
+                    AddSyncError(syncErrors, $"Local insert failed ({typeof(T).Name}): {ex.Message}");
                     System.Diagnostics.Debug.WriteLine($"[SyncService] Local insert failed ({typeof(T).Name}): {ex.Message}");
-                    System.IO.File.AppendAllText("sync_error.txt", $"[SyncService] Local insert failed ({typeof(T).Name}): {ex.ToString()}\n");
                 }
             }
             else
@@ -367,8 +537,31 @@ public class SyncService : ISyncService
                 // UPDATE via raw SQL — never touches EF change tracker
                 var localAt = (DateTime?)updatedProp.GetValue(localMatch) ?? DateTime.MinValue;
                 var cloudTime = cloudAt ?? DateTime.MinValue;
+                var overrides = await foreignKeyTranslator.GetOverridesAsync(cloud, sourceIsMySql: true, syncErrors);
                 if (cloudTime > localAt)
-                    await RawSqlUpdateAsync(localConn, localTableName, localScalars, localPkNames, incoming: cloud, existing: localMatch, isMySql: false);
+                {
+                    try
+                    {
+                        await RawSqlUpdateAsync(localConn, localTableName, localScalars, localPkNames,
+                            incoming: cloud, existing: localMatch, isMySql: false, overrides);
+                    }
+                    catch (Exception ex)
+                    {
+                        AddSyncError(syncErrors, $"Local update failed ({typeof(T).Name}): {ex.Message}");
+                    }
+                }
+                else if (overrides.Count > 0)
+                {
+                    try
+                    {
+                        await RawSqlUpdateOverridesAsync(localConn, localTableName, localScalars,
+                            localPkNames, localMatch, isMySql: false, overrides);
+                    }
+                    catch (Exception ex)
+                    {
+                        AddSyncError(syncErrors, $"Local relationship repair failed ({typeof(T).Name}): {ex.Message}");
+                    }
+                }
             }
         }
     }
@@ -388,7 +581,8 @@ public class SyncService : ISyncService
         HashSet<string> pkPropNames,
         T incoming,
         T existing,
-        bool isMySql) where T : class
+        bool isMySql,
+        IReadOnlyDictionary<string, object?>? overrides = null) where T : class
     {
         string Q(string n) => isMySql ? $"`{n}`" : $"\"{n}\"";
 
@@ -403,7 +597,9 @@ public class SyncService : ISyncService
             var clrProp = typeof(T).GetProperty(prop.Name);
             if (clrProp == null) continue;
 
-            var value = clrProp.GetValue(incoming) ?? DBNull.Value;
+            var value = overrides != null && overrides.TryGetValue(prop.Name, out var overrideValue)
+                ? overrideValue ?? DBNull.Value
+                : clrProp.GetValue(incoming) ?? DBNull.Value;
             var p = cmd.CreateParameter();
             p.ParameterName = $"@p{idx}";
             p.Value = value;
@@ -427,14 +623,7 @@ public class SyncService : ISyncService
 
         cmd.CommandText = $"UPDATE {Q(tableName)} SET {string.Join(", ", setClauses)} WHERE {Q(pkColName)} = @pkVal";
 
-        try
-        {
-            await cmd.ExecuteNonQueryAsync();
-        }
-        catch (Exception ex)
-        {
-            System.Diagnostics.Debug.WriteLine($"[SyncService] RawSqlUpdate failed on {tableName}: {ex.Message}");
-        }
+        await cmd.ExecuteNonQueryAsync();
     }
 
     private async Task RawSqlInsertAsync<T>(
@@ -443,7 +632,8 @@ public class SyncService : ISyncService
         IEnumerable<IProperty> scalarProps,
         T incoming,
         bool isMySql,
-        HashSet<string>? skipCols = null) where T : class
+        HashSet<string>? skipCols = null,
+        IReadOnlyDictionary<string, object?>? overrides = null) where T : class
     {
         string Q(string n) => isMySql ? $"`{n}`" : $"\"{n}\"";
 
@@ -459,7 +649,9 @@ public class SyncService : ISyncService
             var clrProp = typeof(T).GetProperty(prop.Name);
             if (clrProp == null) continue;
 
-            var value = clrProp.GetValue(incoming) ?? DBNull.Value;
+            var value = overrides != null && overrides.TryGetValue(prop.Name, out var overrideValue)
+                ? overrideValue ?? DBNull.Value
+                : clrProp.GetValue(incoming) ?? DBNull.Value;
             var p = cmd.CreateParameter();
             p.ParameterName = $"@p{idx}";
             p.Value = value;
@@ -470,18 +662,127 @@ public class SyncService : ISyncService
             idx++;
         }
 
-        string insertVerb = isMySql ? "INSERT IGNORE" : "INSERT OR REPLACE";
-        cmd.CommandText = $"{insertVerb} INTO {Q(tableName)} ({string.Join(", ", cols)}) VALUES ({string.Join(", ", vals)})";
+        cmd.CommandText = $"INSERT INTO {Q(tableName)} ({string.Join(", ", cols)}) VALUES ({string.Join(", ", vals)})";
+        await cmd.ExecuteNonQueryAsync();
+    }
 
-        try
+    private async Task RawSqlUpdateOverridesAsync<T>(
+        DbConnection conn,
+        string tableName,
+        IEnumerable<IProperty> scalarProps,
+        HashSet<string> pkPropNames,
+        T existing,
+        bool isMySql,
+        IReadOnlyDictionary<string, object?> overrides) where T : class
+    {
+        string Q(string name) => isMySql ? $"`{name}`" : $"\"{name}\"";
+
+        using var cmd = conn.CreateCommand();
+        var setClauses = new List<string>();
+        int index = 0;
+
+        foreach (var prop in scalarProps)
         {
-            await cmd.ExecuteNonQueryAsync();
+            if (pkPropNames.Contains(prop.Name) || !overrides.TryGetValue(prop.Name, out var value))
+                continue;
+
+            string parameterName = $"@p{index}";
+            AddParameter(cmd, parameterName, value ?? DBNull.Value);
+            setClauses.Add($"{Q(prop.GetColumnName())} = {parameterName}");
+            index++;
         }
-        catch (Exception ex)
+
+        if (setClauses.Count == 0)
+            return;
+
+        string pkName = pkPropNames.First();
+        var pkProperty = typeof(T).GetProperty(pkName)!;
+        string pkColumnName = scalarProps.First(p => p.Name == pkName).GetColumnName();
+        AddParameter(cmd, "@pkValue", pkProperty.GetValue(existing) ?? DBNull.Value);
+        cmd.CommandText =
+            $"UPDATE {Q(tableName)} SET {string.Join(", ", setClauses)} WHERE {Q(pkColumnName)} = @pkValue";
+        await cmd.ExecuteNonQueryAsync();
+    }
+
+    private static async Task RepairOrphanedForeignKeysAsync(
+        DbConnection connection,
+        bool isMySql,
+        List<string> errors)
+    {
+        var relationships = new[]
         {
-            System.Diagnostics.Debug.WriteLine($"[SyncService] RawSqlInsert failed on {tableName}: {ex.Message}");
-            throw;
+            (Table: "users", ForeignKey: "office_id", Principal: "tbl_offices", PrincipalKey: "id", RequiredFallback: false),
+            (Table: "master_budget", ForeignKey: "created_by", Principal: "users", PrincipalKey: "id", RequiredFallback: true),
+            (Table: "tbl_program_provision", ForeignKey: "office_id", Principal: "tbl_offices", PrincipalKey: "id", RequiredFallback: false),
+            (Table: "officeallocations", ForeignKey: "YearlyBudgetId", Principal: "master_budget", PrincipalKey: "id", RequiredFallback: false),
+            (Table: "officeallocations", ForeignKey: "office_id", Principal: "tbl_offices", PrincipalKey: "id", RequiredFallback: false),
+            (Table: "project_details", ForeignKey: "yearly_budget_id", Principal: "master_budget", PrincipalKey: "id", RequiredFallback: false),
+            (Table: "tbl_transaction", ForeignKey: "program_id", Principal: "tbl_program_provision", PrincipalKey: "id", RequiredFallback: false),
+            (Table: "tbl_transaction", ForeignKey: "budget_allocation_id", Principal: "officeallocations", PrincipalKey: "Id", RequiredFallback: false),
+            (Table: "tbl_transaction", ForeignKey: "distributed_by_id", Principal: "users", PrincipalKey: "id", RequiredFallback: false),
+            (Table: "tbl_transaction", ForeignKey: "user_id", Principal: "users", PrincipalKey: "id", RequiredFallback: false),
+            (Table: "tbl_transaction", ForeignKey: "office_id", Principal: "tbl_offices", PrincipalKey: "id", RequiredFallback: false),
+            (Table: "tbl_transaction", ForeignKey: "services_id", Principal: "tbl_services", PrincipalKey: "services_id", RequiredFallback: false)
+        };
+
+        foreach (var relationship in relationships)
+        {
+            try
+            {
+                using var cmd = connection.CreateCommand();
+                if (isMySql)
+                {
+                    string replacement = relationship.RequiredFallback
+                        ? "(SELECT fallback.`id` FROM `users` fallback WHERE LOWER(fallback.`name`) = 'superadmin' ORDER BY fallback.`id` LIMIT 1)"
+                        : "NULL";
+                    cmd.CommandText =
+                        $"UPDATE `{relationship.Table}` dependent " +
+                        $"LEFT JOIN `{relationship.Principal}` principal " +
+                        $"ON dependent.`{relationship.ForeignKey}` = principal.`{relationship.PrincipalKey}` " +
+                        $"SET dependent.`{relationship.ForeignKey}` = {replacement} " +
+                        $"WHERE dependent.`{relationship.ForeignKey}` IS NOT NULL " +
+                        $"AND principal.`{relationship.PrincipalKey}` IS NULL";
+                }
+                else
+                {
+                    string replacement = relationship.RequiredFallback
+                        ? "(SELECT \"id\" FROM \"users\" WHERE LOWER(\"name\") = 'superadmin' ORDER BY \"id\" LIMIT 1)"
+                        : "NULL";
+                    cmd.CommandText =
+                        $"UPDATE \"{relationship.Table}\" SET \"{relationship.ForeignKey}\" = {replacement} " +
+                        $"WHERE \"{relationship.ForeignKey}\" IS NOT NULL AND NOT EXISTS (" +
+                        $"SELECT 1 FROM \"{relationship.Principal}\" principal " +
+                        $"WHERE principal.\"{relationship.PrincipalKey}\" = " +
+                        $"\"{relationship.Table}\".\"{relationship.ForeignKey}\")";
+                }
+
+                int repaired = await cmd.ExecuteNonQueryAsync();
+                if (repaired > 0)
+                {
+                    System.Diagnostics.Debug.WriteLine(
+                        $"[SyncService] Repaired {repaired} orphaned {relationship.Table}.{relationship.ForeignKey} value(s).");
+                }
+            }
+            catch (Exception ex)
+            {
+                AddSyncError(errors,
+                    $"Relationship validation failed ({relationship.Table}.{relationship.ForeignKey}): {ex.Message}");
+            }
         }
+    }
+
+    private static void AddParameter(DbCommand command, string name, object value)
+    {
+        var parameter = command.CreateParameter();
+        parameter.ParameterName = name;
+        parameter.Value = value;
+        command.Parameters.Add(parameter);
+    }
+
+    private static void AddSyncError(List<string> errors, string message)
+    {
+        if (!errors.Contains(message, StringComparer.Ordinal))
+            errors.Add(message);
     }
 
     /// <summary>
@@ -491,7 +792,10 @@ public class SyncService : ISyncService
     {
         try
         {
-            string logDir = System.IO.Path.Combine(AppContext.BaseDirectory, "Logs");
+            string logDir = System.IO.Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                "GoodGovernanceApp",
+                "Logs");
             if (!System.IO.Directory.Exists(logDir))
                 System.IO.Directory.CreateDirectory(logDir);
 
