@@ -172,7 +172,12 @@ namespace GoodGovernanceApp.ViewModels
         }
 
         // ── Database Mode ────────────────────────────────────────────────────
-        public string DatabaseMode { get; set; } = "Remote";
+        private string _databaseMode = "Remote";
+        public string DatabaseMode
+        {
+            get => _databaseMode;
+            set { _databaseMode = value; OnPropertyChanged(); }
+        }
 
         // ── Remote GGMS Database Fields (194.59.164.58, main online DB) ─────
         private string _remoteServer = "194.59.164.58";
@@ -463,63 +468,42 @@ namespace GoodGovernanceApp.ViewModels
         private string ActiveGgmsConnStr => BuildRemoteConnStr();
 
         // ── Connection Test ───────────────────────────────────────────────────
+        // Local SQLite is DISABLED — only the 3 MySQL connections are tested.
         private async Task ExecuteTestBoth()
         {
             IsTesting = true;
-            SqliteTestResult = "Testing Local SQLite...";
-            GgmsTestResult = "Testing Online...";
+            SqliteTestResult = "Local SQLite: DISABLED (not used).";
+            GgmsTestResult = "Testing Remote...";
             NetworkTestResult = "Testing Network (LAN)...";
             CrsTestResult = "Testing CRS Database...";
 
-            // 1. Test Local SQLite DB
-            var sqliteTask = Task.Run(async () =>
-            {
-                try
-                {
-                    if (!File.Exists(SqliteDbPath))
-                        return (false, "SQLite database file not found yet.");
-                    using var conn = new SqliteConnection($"Data Source={SqliteDbPath}");
-                    await conn.OpenAsync();
-                    using var cmd = conn.CreateCommand();
-                    cmd.CommandText = "SELECT COUNT(*) FROM users;";
-                    var count = Convert.ToInt32(await cmd.ExecuteScalarAsync());
-                    return (true, $"{count} users found");
-                }
-                catch (Exception ex)
-                {
-                    return (false, ex.Message);
-                }
-            });
-
-            // 2. Test Remote GGMS (MySQL)
+            // 1. Test Remote GGMS (MySQL)
             var ggmsTask = TestConnectionAsync(ActiveGgmsConnStr);
 
-            // 3. Test Network (Remote MySQL — GGMS)
+            // 2. Test Network (LAN MySQL — GGMS)
             var networkTask = TestConnectionAsync(BuildNetworkConnStr());
 
-            // 4. Test CRS Database (Office LAN MySQL — CRS)
+            // 3. Test CRS Database (Office LAN MySQL — CRS)
             var crsTask = TestConnectionAsync(BuildCrsConnStr());
 
-            await Task.WhenAll(sqliteTask, ggmsTask, networkTask, crsTask);
+            await Task.WhenAll(ggmsTask, networkTask, crsTask);
 
-            var (sqliteOk, sqliteMsg) = sqliteTask.Result;
             var (ggmsOk, ggmsMsg) = ggmsTask.Result;
             var (networkOk, networkMsg) = networkTask.Result;
             var (crsOk, crsMsg) = crsTask.Result;
 
-            SqliteTestResult = sqliteOk ? $"✅ Local SQLite: Connected ({sqliteMsg})" : $"❌ Local SQLite: {sqliteMsg}";
-            GgmsTestResult = ggmsOk ? "✅ Online: Connected" : $"⚠ Online: Offline / Unreachable ({ggmsMsg})";
+            GgmsTestResult = ggmsOk ? "✅ Remote: Connected" : $"⚠ Remote: Offline / Unreachable ({ggmsMsg})";
             NetworkTestResult = networkOk ? "✅ Network (LAN): Connected" : $"⚠ Network (LAN): Offline / Unreachable ({networkMsg})";
             CrsTestResult = crsOk ? "✅ CRS Database: Connected" : $"⚠ CRS Database: Offline / Unreachable ({crsMsg})";
             IsTesting = false;
         }
 
-        // ── Test 3 MySQL connections (Online + Network LAN GGMS + CRS, no SQLite) ──
+        // ── Test 3 MySQL connections (Remote + Network LAN GGMS + CRS, no SQLite) ──
         // Used by the Database Connection Settings popup with tab navigation.
         private async Task ExecuteTestThree()
         {
             IsTesting = true;
-            GgmsTestResult = "Testing Online...";
+            GgmsTestResult = "Testing Remote...";
             NetworkTestResult = "Testing Network (LAN)...";
             CrsTestResult = "Testing CRS Database...";
 
@@ -533,7 +517,7 @@ namespace GoodGovernanceApp.ViewModels
             var (networkOk, networkMsg) = networkTask.Result;
             var (crsOk, crsMsg) = crsTask.Result;
 
-            GgmsTestResult = ggmsOk ? "✅ Online: Connected" : $"⚠ Online: Offline / Unreachable ({ggmsMsg})";
+            GgmsTestResult = ggmsOk ? "✅ Remote: Connected" : $"⚠ Remote: Offline / Unreachable ({ggmsMsg})";
             NetworkTestResult = networkOk ? "✅ Network (LAN): Connected" : $"⚠ Network (LAN): Offline / Unreachable ({networkMsg})";
             CrsTestResult = crsOk ? "✅ CRS Database: Connected" : $"⚠ CRS Database: Offline / Unreachable ({crsMsg})";
             IsTesting = false;
@@ -543,9 +527,9 @@ namespace GoodGovernanceApp.ViewModels
         private async Task ExecuteTestCloud()
         {
             IsTesting = true;
-            GgmsTestResult = "Testing Online...";
+            GgmsTestResult = "Testing Remote...";
             var (ok, msg) = await TestConnectionAsync(ActiveGgmsConnStr);
-            GgmsTestResult = ok ? "✅ Online: Connected" : $"⚠ Online: Offline / Unreachable ({msg})";
+            GgmsTestResult = ok ? "✅ Remote: Connected" : $"⚠ Remote: Offline / Unreachable ({msg})";
             IsTesting = false;
         }
 
@@ -596,6 +580,10 @@ namespace GoodGovernanceApp.ViewModels
         {
             try
             {
+                // Keep the saved mode (Remote/Network) so Save doesn't overwrite it.
+                string savedMode = _config["AppSettings:DatabaseMode"] ?? "Remote";
+                DatabaseMode = string.IsNullOrWhiteSpace(savedMode) ? "Remote" : savedMode.Trim();
+
                 // Read Remote Connection string from appsettings.json and split into fields
                 string rawRemote = _config.GetConnectionString("RemoteConnection") 
                     ?? "Server=194.59.164.58;Port=3306;Database=u621755393_ggms;User=u621755393_ggms_user;Password=Ggms@2026;AllowZeroDateTime=True;ConvertZeroDateTime=True;";
