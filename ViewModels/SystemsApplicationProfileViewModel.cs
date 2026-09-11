@@ -53,7 +53,7 @@ public class SystemsApplicationProfileViewModel : ViewModelBase
             // Ensure table exists
             string createTableQuery = @"
                 CREATE TABLE IF NOT EXISTS systemsprofile (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    id INT AUTO_INCREMENT PRIMARY KEY,
                     PhotoAddress NVARCHAR(500)
                 );";
 
@@ -156,7 +156,7 @@ public class SystemsApplicationProfileViewModel : ViewModelBase
                 string updateQuery = @"
                     UPDATE systemsprofile 
                     SET PhotoAddress = @photoAddress 
-                    WHERE id IN (SELECT id FROM systemsprofile ORDER BY id ASC LIMIT 1);";
+                    ORDER BY id ASC LIMIT 1;";
                 
                 await _dbHelper.ExecuteNonQueryAsync(updateQuery,
                     new SqliteParameter("@photoAddress", PhotoAddress));
