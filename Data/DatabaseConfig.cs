@@ -30,7 +30,7 @@ public class DatabaseConfig : IDatabaseConfig
     {
         get
         {
-            string mode = _config["AppSettings:DatabaseMode"] ?? "Remote";
+            string mode = _config["AppSettings:DatabaseMode"] ?? "Online";
             return mode;
         }
     }
@@ -42,7 +42,7 @@ public class DatabaseConfig : IDatabaseConfig
             // The footer status shows ONLY this connection — the database the
             // system is actually using. Remote (Online) is the default;
             // Network (LAN) is used when DatabaseMode is set to Network/LAN.
-            string mode = (_config["AppSettings:DatabaseMode"] ?? "Remote").Trim();
+            string mode = (_config["AppSettings:DatabaseMode"] ?? "Online").Trim();
             if (mode.Equals("Network", StringComparison.OrdinalIgnoreCase)
                 || mode.Equals("LAN", StringComparison.OrdinalIgnoreCase)
                 || mode.Equals("LanConnection", StringComparison.OrdinalIgnoreCase))
@@ -121,7 +121,7 @@ public class DatabaseConfig : IDatabaseConfig
         if (!root.ContainsKey("ConnectionStrings") || root["ConnectionStrings"] is not JsonObject)
             root["ConnectionStrings"] = new JsonObject();
 
-        root["AppSettings"]!["DatabaseMode"] = string.IsNullOrWhiteSpace(mode) ? "Remote" : mode;
+        root["AppSettings"]!["DatabaseMode"] = string.IsNullOrWhiteSpace(mode) ? "Online" : mode;
         root["AppSettings"]!["UseRemoteDatabase"] = true;
         root["ConnectionStrings"]!["RemoteConnection"] = ggmsConnStr;
         if (!string.IsNullOrWhiteSpace(networkConnStr))
