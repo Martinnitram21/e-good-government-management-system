@@ -13,6 +13,7 @@ public interface IDatabaseConfig
     string ConnectionString { get; }
     string NetworkConnectionString { get; }
     string CrsConnectionString { get; }
+    string ActiveMode { get; }
     void SaveToAppsettings(string mode, string ggmsConnStr, string networkConnStr = "", string crsConnStr = "");
 }
 
