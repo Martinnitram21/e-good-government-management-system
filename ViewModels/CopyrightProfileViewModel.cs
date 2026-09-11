@@ -3,6 +3,7 @@ using System.IO;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Input;
+using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using Microsoft.Win32;
 using Microsoft.Data.Sqlite;
@@ -16,7 +17,7 @@ public class CopyrightProfileViewModel : ViewModelBase
 {
     private readonly DatabaseHelper _dbHelper;
     private string _photoAddress = string.Empty;
-    private BitmapImage? _photoPreview;
+    private ImageSource? _photoPreview;
 
     public string PhotoAddress
     {
@@ -24,7 +25,7 @@ public class CopyrightProfileViewModel : ViewModelBase
         set { _photoAddress = value; OnPropertyChanged(); }
     }
 
-    public BitmapImage? PhotoPreview
+    public ImageSource? PhotoPreview
     {
         get => _photoPreview;
         set { _photoPreview = value; OnPropertyChanged(); }
@@ -137,7 +138,7 @@ public class CopyrightProfileViewModel : ViewModelBase
 
     private void LoadPhoto(string path)
     {
-        PhotoPreview = ImageHelper.LoadBitmapSafe(path, "pack://application:,,,/GoodGovernanceApp;component/Assets/Images/copyright.png");
+        PhotoPreview = ImageHelper.LoadLogoSafe(path, "pack://application:,,,/GoodGovernanceApp;component/Assets/Images/copyright.png");
     }
 
     private async Task ExecuteSaveAsync()
