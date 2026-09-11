@@ -57,7 +57,7 @@ DefaultGroupName={#MyAppName}
 ; copies it straight to the user's Downloads folder
 OutputDir=.\InstallerOutput
 OutputBaseFilename=GoodGovernanceSetup-{#MyAppVersion}
-SetupIconFile=Assets\Images\ggms.ico
+SetupIconFile=Assets\Images\applicationlogo.ico
 UninstallDisplayIcon={app}\{#MyAppExeName}
 Compression=lzma2
 SolidCompression=yes
