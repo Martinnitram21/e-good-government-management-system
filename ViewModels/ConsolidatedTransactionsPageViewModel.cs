@@ -113,7 +113,7 @@ public class ConsolidatedTransactionsPageViewModel : ViewModelBase
             {
                 var vm = new BeneficiaryAnalyticsViewModel(_dbContext, _crsBeneficiaryService, t.BeneficiaryId, t.FullName);
                 var window = new BeneficiaryAnalyticsWindow(vm);
-                window.ShowDialog();
+                GoodGovernanceApp.Utilities.ModalHelper.Show(window);
             }
         });
 
@@ -123,7 +123,7 @@ public class ConsolidatedTransactionsPageViewModel : ViewModelBase
             {
                 var vm = new OfficeAnalyticsViewModel(_dbContext, t.OfficeId, t.OfficeName);
                 var window = new OfficeAnalyticsWindow(vm);
-                window.ShowDialog();
+                GoodGovernanceApp.Utilities.ModalHelper.Show(window);
             }
         });
 
@@ -133,7 +133,7 @@ public class ConsolidatedTransactionsPageViewModel : ViewModelBase
             {
                 var vm = new ProjectAnalyticsViewModel(_dbContext, t.ProjectDetailsId, t.ProjectName);
                 var window = new ProjectAnalyticsWindow(vm);
-                window.ShowDialog();
+                GoodGovernanceApp.Utilities.ModalHelper.Show(window);
             }
         });
 
