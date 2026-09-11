@@ -18,7 +18,7 @@ namespace GoodGovernanceApp.ViewModels;
 /// <summary>
 /// Represents a Metro tile navigation item.
 /// </summary>
-public class NavigationItem
+public class NavigationItem : ViewModelBase
 {
     public string Name      { get; set; } = string.Empty;
     public string Icon      { get; set; } = "Apps";
@@ -29,6 +29,17 @@ public class NavigationItem
 
     /// <summary>Optional tile group label shown in the dashboard.</summary>
     public string Group     { get; set; } = string.Empty;
+
+    /// <summary>Short subtitle shown under the tile name on the dashboard.</summary>
+    public string Description { get; set; } = string.Empty;
+
+    private bool _isSelected;
+    /// <summary>True when this item's view is currently open — drives sidebar highlight.</summary>
+    public bool IsSelected
+    {
+        get => _isSelected;
+        set { _isSelected = value; OnPropertyChanged(); }
+    }
 }
 
 public class AppNotification
@@ -59,9 +70,9 @@ public class MainViewModel : ViewModelBase, IDisposable
     private string?        _profilePhotoPath;
     private BitmapImage?   _profilePhotoSource;
     private string         _currentSectionTitle = "Home";
-    private BitmapImage?   _systemPhotoSource;
-    private BitmapImage? _systemGovPhotoSource;
-    private BitmapImage?   _copyrightPhotoSource;
+    private System.Windows.Media.ImageSource?   _systemPhotoSource;
+    private System.Windows.Media.ImageSource? _systemGovPhotoSource;
+    private System.Windows.Media.ImageSource?   _copyrightPhotoSource;
     private bool           _hasNewNotifications = false;
 
     // ── public properties ─────────────────────────────────────────────────────
@@ -85,9 +96,13 @@ public class MainViewModel : ViewModelBase, IDisposable
         get => _isShowingDashboard;
         set
         {
+            if (_isShowingDashboard == value) return;
             _isShowingDashboard = value;
+            if (value)
+                IsSidebarOpen = false;
             OnPropertyChanged();
             OnPropertyChanged(nameof(IsShowingView));
+            CommandManager.InvalidateRequerySuggested();
         }
     }
 
@@ -112,19 +127,19 @@ public class MainViewModel : ViewModelBase, IDisposable
         set { _profilePhotoSource = value; OnPropertyChanged(); }
     }
 
-    public BitmapImage? SystemPhotoSource
+    public System.Windows.Media.ImageSource? SystemPhotoSource
     {
         get => _systemPhotoSource;
         set { _systemPhotoSource = value; OnPropertyChanged(); }
     }
 
-    public BitmapImage? GovPhotoSource
+    public System.Windows.Media.ImageSource? GovPhotoSource
     {
         get => _systemGovPhotoSource;
         set { _systemGovPhotoSource = value; OnPropertyChanged(); }
     }
 
-    public BitmapImage? CopyrightPhotoSource
+    public System.Windows.Media.ImageSource? CopyrightPhotoSource
     {
         get => _copyrightPhotoSource;
         set { _copyrightPhotoSource = value; OnPropertyChanged(); }
@@ -153,6 +168,11 @@ public class MainViewModel : ViewModelBase, IDisposable
     }
 
     public ObservableCollection<NavigationItem> NavigationItems { get; }
+    public IReadOnlyList<NavigationItem> SidebarPrimaryItems { get; }
+    public IReadOnlyList<NavigationItem> SidebarTrailingItems { get; }
+    public IReadOnlyList<NavigationItem> DashboardPrimaryItems { get; }
+    public IReadOnlyList<NavigationItem> DashboardMiddleItems { get; }
+    public IReadOnlyList<NavigationItem> DashboardBottomItems { get; }
     public ObservableCollection<AppNotification> Notifications { get; } = new();
 
     public bool HasNewNotifications
@@ -278,7 +298,7 @@ public class MainViewModel : ViewModelBase, IDisposable
     public bool IsSyncing
     {
         get => _isSyncing;
-        set { _isSyncing = value; OnPropertyChanged(); }
+        set { _isSyncing = value; OnPropertyChanged(); CommandManager.InvalidateRequerySuggested(); }
     }
 
     private string _syncStatus = "Waiting...";
@@ -304,6 +324,42 @@ public class MainViewModel : ViewModelBase, IDisposable
         set { _lastSyncErrors = value; OnPropertyChanged(); }
     }
 
+    // ── dashboard KPI strip (cheap COUNT/SUM scalars, display-only) ──────────
+    private string _kpiBudgetText = "₱0.00";
+    public string KpiBudgetText
+    {
+        get => _kpiBudgetText;
+        set { _kpiBudgetText = value; OnPropertyChanged(); }
+    }
+
+    private string _kpiTransactionText = "0";
+    public string KpiTransactionText
+    {
+        get => _kpiTransactionText;
+        set { _kpiTransactionText = value; OnPropertyChanged(); }
+    }
+
+    private string _kpiUserText = "0";
+    public string KpiUserText
+    {
+        get => _kpiUserText;
+        set { _kpiUserText = value; OnPropertyChanged(); }
+    }
+
+    private string _kpiPendingText = "0";
+    public string KpiPendingText
+    {
+        get => _kpiPendingText;
+        set { _kpiPendingText = value; OnPropertyChanged(); }
+    }
+
+    private string _kpiUpdatedText = "Updated —";
+    public string KpiUpdatedText
+    {
+        get => _kpiUpdatedText;
+        set { _kpiUpdatedText = value; OnPropertyChanged(); }
+    }
+
     // ── commands ──────────────────────────────────────────────────────────────
     public ICommand LogoutCommand        { get; }
     public ICommand OpenAppProfileCommand{ get; }
@@ -315,6 +371,8 @@ public class MainViewModel : ViewModelBase, IDisposable
     public ICommand OpenNotificationsCommand   { get; }
     public ICommand SyncNowCommand             { get; }
     public ICommand ViewSyncLogCommand         { get; }
+    public ICommand MinimizeMainWindowCommand  { get; }
+    public ICommand CloseMainWindowCommand     { get; }
 
     private readonly DatabaseHelper _dbHelper;
     private readonly IServiceProvider _serviceProvider;
@@ -371,13 +429,15 @@ public class MainViewModel : ViewModelBase, IDisposable
 
         // Seed the initial state from whatever ConnectivityService already knows
         RefreshConnectionStatus(_connectivityService.IsOnline);
-        SyncStatus = "Direct database active";
+        SyncStatus = "Ready — Online to Network sync";
 
         // Ask ConnectivityService to push its current status to all subscribers immediately
         _connectivityService.SyncCurrentStatus();
 
         // Commands
-        SyncNowCommand = new RelayCommand(async _ => await _syncService.SyncNowAsync(), _ => IsOnline && !IsSyncing);
+        // e-KARD pattern: app runs fully on Online/Remote; footer Sync button syncs
+        // Online (Remote) <-> Network (LAN). Requires both reachable.
+        SyncNowCommand = new RelayCommand(async _ => await _syncService.SyncNowAsync(), _ => IsOnline && IsNetworkOnline && !IsSyncing);
         ViewSyncLogCommand = new RelayCommand(_ =>
         {
             string logPath = System.IO.Path.Combine(AppContext.BaseDirectory, "Logs", "sync_log.txt");
@@ -395,8 +455,16 @@ public class MainViewModel : ViewModelBase, IDisposable
             IsShowingDashboard   = true;
             CurrentSectionTitle  = "Home";
             CurrentView          = null!;
+            UpdateSidebarSelection("Dashboard");
         });
-        ToggleSidebarCommand  = new RelayCommand(_ => IsSidebarOpen = !IsSidebarOpen);
+        ToggleSidebarCommand  = new RelayCommand(
+            _ => IsSidebarOpen = !IsSidebarOpen,
+            _ => IsShowingView);
+        MinimizeMainWindowCommand = new RelayCommand(_ => SetMainWindowState(WindowState.Minimized));
+        CloseMainWindowCommand = new RelayCommand(_ =>
+        {
+            Application.Current?.Windows.OfType<Views.MainWindow>().FirstOrDefault()?.Close();
+        });
         NotificationClickedCommand  = new RelayCommand(ExecuteNotificationClicked);
         OpenNotificationsCommand    = new RelayCommand(_ => IsNotificationPopupOpen = true);
 
@@ -405,20 +473,21 @@ public class MainViewModel : ViewModelBase, IDisposable
         // ── Build navigation items with Metro tile colors ──────────────────
         var allItems = new List<NavigationItem>
         {
-            new() { Name="Dashboard",        Icon="ViewDashboard",    ViewToken="Dashboard",      TileColor="#D90000", Group="Main"       },
-            new() { Name="My Profile",       Icon="AccountEdit",      ViewToken="Profile",        TileColor="#8DB355", Group="Main"       },
-            new() { Name="Users",            Icon="AccountGroup",     ViewToken="Users",          TileColor="#D90000", Group="Management" },
-            new() { Name="Parameters",       Icon="CogBox",           ViewToken="Parameters",     TileColor="#8DB355", Group="System"     },
-            new() { Name="Transactions",     Icon="Finance",          ViewToken="Transactions",   TileColor="#D90000", Group="Finance"    },
-            new() { Name="Consolidated",     Icon="TableMultiple",    ViewToken="ConsolidatedTransactions", TileColor="#8DB355", Group="Finance" },
-            new() { Name="Budget Allocation",Icon="ScaleBalance",     ViewToken="BudgetAllocation",TileColor="#D90000",Group="Finance"   },
-            new() { Name="CRS Beneficiaries",Icon="AccountMultiple",  ViewToken="CrsBeneficiary", TileColor="#8DB355", Group="Management" },
-            new() { Name="Reports",          Icon="FileChart",        ViewToken="Reports",        TileColor="#D90000", Group="Reports"    },
+            new() { Name="Dashboard",        Icon="ViewDashboard",    ViewToken="Dashboard",      TileColor="#171717", Group="Main",       Description="System overview." },
+            new() { Name="Analytics",        Icon="ChartBar",         ViewToken="Analytics",      TileColor="#B38B00", Group="Main",       Description="Budget and financial insights." },
+            new() { Name="My Profile",       Icon="AccountEdit",      ViewToken="Profile",        TileColor="#2D2D2D", Group="Main",       Description="Signed-in account." },
+            new() { Name="Users",            Icon="AccountGroup",     ViewToken="Users",          TileColor="#D90000", Group="Management", Description="Manage system accounts." },
+            new() { Name="Parameters",       Icon="CogBox",           ViewToken="Parameters",     TileColor="#B38B00", Group="System",     Description="System variables." },
+            new() { Name="Transactions",     Icon="Finance",          ViewToken="Transactions",   TileColor="#171717", Group="Finance",    Description="Financial records." },
+            new() { Name="Consolidated",     Icon="TableMultiple",    ViewToken="ConsolidatedTransactions", TileColor="#D90000", Group="Finance", Description="All transactions." },
+            new() { Name="Budget Allocation",Icon="ScaleBalance",     ViewToken="BudgetAllocation",TileColor="#2D2D2D",Group="Finance",   Description="Manage allocations." },
+            new() { Name="CRS Beneficiaries",Icon="AccountMultiple",  ViewToken="CrsBeneficiary", TileColor="#B38B00", Group="Management", Description="Registry & residents." },
+            new() { Name="Reports",          Icon="FileChart",        ViewToken="Reports",        TileColor="#D90000", Group="Reports",    Description="Analytics & data." },
 
-            new() { Name="File Center",      Icon="CloudUpload",      ViewToken="FileUpload",     TileColor="#8DB355", Group="System"     },
-            new() { Name="Evaluation Center",Icon="FileCertificate",  ViewToken="Evaluation",     TileColor="#D90000", Group="Reports"    },
-            new() { Name="Audit Log",        Icon="FormatListBulleted",ViewToken="AuditLog",      TileColor="#8DB355", Group="System"     },
-            new() { Name="Settings & Backups",Icon="DatabaseSettings",ViewToken="Settings",       TileColor="#D90000", Group="System"     },
+            new() { Name="File Center",      Icon="CloudUpload",      ViewToken="FileUpload",     TileColor="#171717", Group="System",     Description="Documents & files." },
+            new() { Name="Evaluation Center",Icon="FileCertificate",  ViewToken="Evaluation",     TileColor="#B38B00", Group="Reports",    Description="Performance metrics." },
+            new() { Name="Audit Log",        Icon="FormatListBulleted",ViewToken="AuditLog",      TileColor="#2D2D2D", Group="System",     Description="Activity trail." },
+            new() { Name="Settings & Backups",Icon="DatabaseSettings",ViewToken="Settings",       TileColor="#D90000", Group="System",     Description="System configuration." },
         };
 
         var role = _sessionService.CurrentUser?.Role;
@@ -432,35 +501,104 @@ public class MainViewModel : ViewModelBase, IDisposable
         }
         else if (role == "Evaluator")
         {
-            filtered = allItems.Where(i => i.ViewToken is "Dashboard" or "Profile" or "Evaluation");
+            filtered = allItems.Where(i => i.ViewToken is "Dashboard" or "Analytics" or "Profile" or "Evaluation");
         }
         else // Standard User
         {
-            filtered = allItems.Where(i => i.ViewToken is "Dashboard" or "Profile" or "Transactions" or "ConsolidatedTransactions" or "FileUpload");
+            filtered = allItems.Where(i => i.ViewToken is "Dashboard" or "Analytics" or "Profile" or "Transactions" or "ConsolidatedTransactions" or "FileUpload");
         }
 
-        NavigationItems = new ObservableCollection<NavigationItem>(filtered);
+        // One sequence drives both navigation surfaces. Settings and Profile
+        // are deliberately the final two modules; Logout is rendered after
+        // them by both the dashboard and sidebar.
+        var visibleItems = filtered
+            .OrderBy(item => item.ViewToken switch
+            {
+                "Settings" => 1,
+                "Profile"  => 2,
+                _          => 0
+            })
+            .ToList();
+        NavigationItems = new ObservableCollection<NavigationItem>(visibleItems);
+
+        SidebarPrimaryItems = visibleItems
+            .Where(item => item.ViewToken is not "Settings" and not "Profile")
+            .ToList();
+        SidebarTrailingItems = visibleItems
+            .Where(item => item.ViewToken is "Settings" or "Profile")
+            .ToList();
+
+        // Split the role-filtered modules into the three bands used by the
+        // Metro dashboard. The Dashboard entry remains available in the sidebar
+        // as the route back to this navigation home; Analytics is a normal tile.
+        var dashboardItems = visibleItems
+            .Where(item => item.ViewToken != "Dashboard")
+            .ToList();
+        DashboardPrimaryItems = dashboardItems.Take(4).ToList();
+        DashboardMiddleItems = dashboardItems.Skip(4).Take(3).ToList();
+        DashboardBottomItems = dashboardItems.Skip(7).ToList();
 
         // Start on the dashboard tile grid
         IsShowingDashboard  = true;
         CurrentSectionTitle = "Home";
+        UpdateSidebarSelection("Dashboard");
     }
 
     private async Task InitializeShellAsync()
     {
         try
         {
-            // Local image work may run together, but database reads are kept
-            // sequential to avoid a connection burst immediately after login.
+            // Stagger shell reads so login doesn't fire 5 connections at once
+            // (startup storm fix). Images first, then profile + notifications with
+            // a short gap. Same data, just spread out.
             await Task.WhenAll(LoadSystemPhotoAsync(), LoadCopyrightPhotoAsync());
-            await LoadGovProfileAsync();
-            await LoadProfilePhotoAsync();
+            await Task.Delay(500);
+            await Task.WhenAll(LoadGovProfileAsync(), LoadProfilePhotoAsync());
+            await Task.Delay(500);
             await LoadNotificationsAsync();
+            await Task.Delay(1000);
+            await LoadKpisAsync();
         }
         catch (Exception ex)
         {
             System.Diagnostics.Debug.WriteLine($"[MainViewModel] Shell initialization skipped: {ex}");
         }
+    }
+
+    // ── dashboard KPI scalars — four single-row queries, no table materialization.
+    // Runs once per shell init (staggered above); failures keep the "0" defaults.
+    private async System.Threading.Tasks.Task LoadKpisAsync()
+    {
+        try
+        {
+            var usersObj = await _dbHelper.ExecuteScalarAsync("SELECT COUNT(*) FROM users;");
+            DispatchToUi(() => KpiUserText = FormatCount(usersObj));
+
+            var txObj = await _dbHelper.ExecuteScalarAsync("SELECT COUNT(*) FROM tbl_transaction;");
+            DispatchToUi(() => KpiTransactionText = FormatCount(txObj));
+
+            var pendingObj = await _dbHelper.ExecuteScalarAsync("SELECT COUNT(*) FROM validate_users WHERE status = 'pending';");
+            DispatchToUi(() => KpiPendingText = FormatCount(pendingObj));
+
+            var budgetObj = await _dbHelper.ExecuteScalarAsync("SELECT COALESCE(SUM(total_budget), 0) FROM master_budget;");
+            DispatchToUi(() =>
+            {
+                if (budgetObj != null && decimal.TryParse(budgetObj.ToString(), out var total))
+                    KpiBudgetText = "₱" + total.ToString("N2");
+                KpiUpdatedText = "Updated " + DateTime.Now.ToString("h:mm tt");
+            });
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[MainViewModel] KPI load skipped: {ex.Message}");
+        }
+    }
+
+    private static string FormatCount(object? value)
+    {
+        if (value != null && long.TryParse(value.ToString(), out var n))
+            return n.ToString("N0");
+        return "0";
     }
 
     private static void DispatchToUi(Action action)
@@ -485,6 +623,14 @@ public class MainViewModel : ViewModelBase, IDisposable
         OnPropertyChanged(nameof(ActiveDatabaseStatusText));
         OnPropertyChanged(nameof(ActiveConnectionIsOnline));
         OnPropertyChanged(nameof(IsActiveModeNetwork));
+        CommandManager.InvalidateRequerySuggested();
+    }
+
+    // ── custom chrome (borderless window) ─────────────────────────────────
+    private static void SetMainWindowState(WindowState state)
+    {
+        var win = Application.Current?.Windows.OfType<Views.MainWindow>().FirstOrDefault();
+        if (win != null) win.WindowState = state;
     }
 
     // ── tile navigation ───────────────────────────────────────────────────────
@@ -492,10 +638,19 @@ public class MainViewModel : ViewModelBase, IDisposable
     {
         if (parameter is not string viewToken) return;
 
+        if (viewToken.Equals("Dashboard", StringComparison.OrdinalIgnoreCase))
+        {
+            IsShowingDashboard = true;
+            CurrentSectionTitle = "Home";
+            CurrentView = null!;
+            UpdateSidebarSelection("Dashboard");
+            return;
+        }
+
         if (viewToken == "BudgetAllocation")
         {
             var dialog = new Views.BudgetYearSelectionWindow { DataContext = _serviceProvider.GetRequiredService<BudgetYearSelectionViewModel>() };
-            var result = dialog.ShowDialog();
+            var result = GoodGovernanceApp.Utilities.ModalHelper.Show(dialog);
             if (result == true && dialog.DataContext is BudgetYearSelectionViewModel vm && vm.SelectedMasterBudget != null)
             {
                 NavigateTo("BudgetAllocation", vm.SelectedMasterBudget);
@@ -509,7 +664,7 @@ public class MainViewModel : ViewModelBase, IDisposable
         {
             var searchDialog = new Views.ConsolidatedSearchWindow();
             searchDialog.Owner = Application.Current.Windows.OfType<Views.MainWindow>().FirstOrDefault();
-            var searchResult = searchDialog.ShowDialog();
+            var searchResult = GoodGovernanceApp.Utilities.ModalHelper.Show(searchDialog);
             if (searchResult == true)
             {
                 var searchParam = (Mode: searchDialog.SearchMode, Value: searchDialog.SearchValue);
@@ -547,15 +702,17 @@ public class MainViewModel : ViewModelBase, IDisposable
     // ── public navigation (called by other ViewModels too) ────────────────────
     public void NavigateTo(string? viewToken, object? parameter = null)
     {
+        UpdateSidebarSelection(viewToken);
         switch (viewToken)
         {
             case "Dashboard":
-                CurrentView = _serviceProvider.GetRequiredService<DashboardViewModel>();
-                break;
             case "Home":
                 IsShowingDashboard  = true;
                 CurrentSectionTitle = "Home";
                 CurrentView         = null!;
+                break;
+            case "Analytics":
+                CurrentView = _serviceProvider.GetRequiredService<DashboardViewModel>();
                 break;
             case "Profile":
                 CurrentView = _serviceProvider.GetRequiredService<ProfileViewModel>();
@@ -623,6 +780,27 @@ public class MainViewModel : ViewModelBase, IDisposable
         }
     }
 
+    // ── sidebar highlight ─────────────────────────────────────────────────────
+    // Marks the open view's nav item selected (IsSelected drives the highlight
+    // in SidebarControl). "Home" maps to the Dashboard item. Unknown tokens
+    // clear the highlight. Also mirrors into SelectedNavItem.
+    private void UpdateSidebarSelection(string? viewToken)
+    {
+        string token = string.Equals(viewToken, "Home", StringComparison.OrdinalIgnoreCase)
+            ? "Dashboard"
+            : viewToken ?? string.Empty;
+
+        NavigationItem? match = null;
+        foreach (var item in NavigationItems)
+        {
+            bool selected = item.ViewToken.Equals(token, StringComparison.OrdinalIgnoreCase);
+            item.IsSelected = selected;
+            if (selected) match = item;
+        }
+        _selectedNavItem = match!;
+        OnPropertyChanged(nameof(SelectedNavItem));
+    }
+
     // ── profile photo ─────────────────────────────────────────────────────────
     private async System.Threading.Tasks.Task LoadProfilePhotoAsync()
     {
@@ -677,8 +855,8 @@ public class MainViewModel : ViewModelBase, IDisposable
         {
             await Task.Run(() =>
             {
-                var img = ImageHelper.LoadBitmapSafe("system_profile.png")
-                       ?? ImageHelper.LoadBitmapSafe("pack://application:,,,/GoodGovernanceApp;component/Assets/Images/system_profile.png");
+                var img = ImageHelper.LoadLogoSafe("system_profile.png")
+                       ?? ImageHelper.LoadLogoSafe("pack://application:,,,/GoodGovernanceApp;component/Assets/Images/system_profile.png");
 
                 if (img != null)
                 {
@@ -696,8 +874,8 @@ public class MainViewModel : ViewModelBase, IDisposable
         {
             await Task.Run(() =>
             {
-                var img = ImageHelper.LoadBitmapSafe("copyright.png")
-                       ?? ImageHelper.LoadBitmapSafe("pack://application:,,,/GoodGovernanceApp;component/Assets/Images/copyright.png");
+                var img = ImageHelper.LoadLogoSafe("copyright.png")
+                       ?? ImageHelper.LoadLogoSafe("pack://application:,,,/GoodGovernanceApp;component/Assets/Images/copyright.png");
 
                 if (img != null)
                 {
@@ -728,15 +906,15 @@ public class MainViewModel : ViewModelBase, IDisposable
 
             await Task.Run(() =>
             {
-                BitmapImage? img = null;
+                System.Windows.Media.ImageSource? img = null;
 
                 if (!string.IsNullOrWhiteSpace(logoAddressFromDb))
-                    img = ImageHelper.LoadBitmapSafe(logoAddressFromDb);
+                    img = ImageHelper.LoadLogoSafe(logoAddressFromDb);
 
                 if (img == null)
-                    img = ImageHelper.LoadBitmapSafe("company_profile_logo.jpg")
-                       ?? ImageHelper.LoadBitmapSafe("logo.png")
-                       ?? ImageHelper.LoadBitmapSafe("pack://application:,,,/GoodGovernanceApp;component/Assets/Images/company_profile_logo.jpg");
+                    img = ImageHelper.LoadLogoSafe("company_profile_logo.jpg")
+                       ?? ImageHelper.LoadLogoSafe("logo.png")
+                       ?? ImageHelper.LoadLogoSafe("pack://application:,,,/GoodGovernanceApp;component/Assets/Images/company_profile_logo.jpg");
 
                 if (img != null)
                 {
@@ -853,12 +1031,12 @@ public class MainViewModel : ViewModelBase, IDisposable
         {
             DataContext = _serviceProvider.GetRequiredService<GoodGovernanceApp.ViewModels.ApplicationProfileViewModel>()
         };
-        window.ShowDialog();
+        GoodGovernanceApp.Utilities.ModalHelper.Show(window);
     }
 
     private void ExecuteOpenSystemsProfile(object? parameter)
     {
         var window = new Views.SystemsApplicationProfile { DataContext = _serviceProvider.GetRequiredService<SystemsApplicationProfileViewModel>() };
-        window.ShowDialog();
+        GoodGovernanceApp.Utilities.ModalHelper.Show(window);
     }
 }
