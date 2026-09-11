@@ -24,6 +24,7 @@ Write-Host "=== 2/2 Compiling Inno Setup installer ===" -ForegroundColor Cyan
 $iscc = @(
   "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe",
   "$env:ProgramFiles\Inno Setup 6\ISCC.exe",
+  (Join-Path $env:LOCALAPPDATA "Programs\Inno Setup 6\ISCC.exe"),
   "$env:TEMP\..\Temp\opencode\InnoSetup\ISCC.exe",
   (Join-Path $env:USERPROFILE "AppData\Local\Temp\opencode\InnoSetup\ISCC.exe")
 ) | Where-Object { Test-Path $_ } | Select-Object -First 1
