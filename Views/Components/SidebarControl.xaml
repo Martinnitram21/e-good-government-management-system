@@ -54,22 +54,6 @@
                         <ItemsControl ItemsSource="{Binding SidebarPrimaryItems}"
                                       ItemTemplate="{StaticResource SidebarNavigationItemTemplate}"/>
 
-                        <Button Style="{StaticResource NavButtonStyle}"
-                                Command="{Binding OpenSystemsProfileCommand}">
-                            <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="Auto"/>
-                                    <ColumnDefinition Width="12"/>
-                                    <ColumnDefinition Width="*"/>
-                                </Grid.ColumnDefinitions>
-                                <Border Grid.Column="0" Background="white" Width="38" Height="38" CornerRadius="10">
-                                    <materialDesign:PackIcon Kind="DatabaseSettings" Foreground="Black" Width="20" Height="20"
-                                                             HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                </Border>
-                                <TextBlock Grid.Column="2" Text="System Profile" VerticalAlignment="Center" FontSize="14"/>
-                            </Grid>
-                        </Button>
-
                         <ItemsControl ItemsSource="{Binding SidebarTrailingItems}"
                                       ItemTemplate="{StaticResource SidebarNavigationItemTemplate}"/>
 
