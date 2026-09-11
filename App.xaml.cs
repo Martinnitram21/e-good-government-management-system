@@ -257,9 +257,9 @@ public partial class App : Application
             {
                 string detail = ex.InnerException?.Message ?? ex.Message;
                 MessageBox.Show(
-                    $"Remote database connection failed.\n\n{detail}\n\n" +
-                    "This application uses direct remote access and will not fall back to the offline SQLite database.",
-                    "Remote Database Unavailable",
+                    $"Active database connection failed (REMOTE).\n\n{detail}\n\n" +
+                    "Please check your internet connection and the Remote database settings, then restart the application.",
+                    "Database Unavailable",
                     MessageBoxButton.OK,
                     MessageBoxImage.Error);
             }
