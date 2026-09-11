@@ -102,7 +102,14 @@
                                   GridLinesVisibility="None"
                                   Background="White"
                                   Foreground="#000000"
-                                  BorderThickness="0">
+                                  BorderThickness="0"
+                                  EnableRowVirtualization="True"
+                                  EnableColumnVirtualization="True"
+                                  VirtualizingPanel.IsVirtualizing="True"
+                                  VirtualizingPanel.VirtualizationMode="Recycling"
+                                  VirtualizingPanel.CacheLength="2,2"
+                                  ScrollViewer.CanContentScroll="True"
+                                  ScrollViewer.IsDeferredScrollingEnabled="True">
 
                             <DataGrid.ColumnHeaderStyle>
                                 <Style TargetType="DataGridColumnHeader">
