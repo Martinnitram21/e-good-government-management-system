@@ -21,7 +21,16 @@
         <StackPanel Grid.Row="0" Margin="0 0 0 12">
             <TextBlock Text="Database Configuration" FontSize="24" FontWeight="Light" Foreground="#000000"/>
             <TextBlock Text="Pick a tab, then enter or verify that connection's details."
-                       FontSize="12" Foreground="#000000" Margin="0 4 0 0"/>
+                       FontSize="12" Foreground="#000000" Margin="0 4 0 8"/>
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                <TextBlock Text="Active Database (used at login):" FontSize="13" FontWeight="SemiBold" Foreground="#000000" VerticalAlignment="Center" Margin="0 0 8 0"/>
+                <ComboBox SelectedValue="{Binding DatabaseMode, UpdateSourceTrigger=PropertyChanged}"
+                          SelectedValuePath="Content" Width="160"
+                          Style="{StaticResource MaterialDesignOutlinedComboBox}">
+                    <ComboBoxItem Content="Remote"/>
+                    <ComboBoxItem Content="Network"/>
+                </ComboBox>
+            </StackPanel>
         </StackPanel>
 
         <!-- Tab navigation: one tab per connection -->
