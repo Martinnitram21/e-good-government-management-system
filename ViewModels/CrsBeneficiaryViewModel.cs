@@ -150,6 +150,7 @@ public class CrsBeneficiaryViewModel : ViewModelBase
             var fullName = b.DisplayName;
             var vm = new GoodGovernanceApp.ViewModels.BeneficiaryAnalyticsViewModel(_dbContext, _crsBeneficiaryService, b.BeneficiaryId, fullName);
             var window = new GoodGovernanceApp.Views.BeneficiaryAnalyticsWindow(vm);
+            GoodGovernanceApp.Utilities.ModalChrome.Apply(window);
             window.Show();
         }
     }
