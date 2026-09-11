@@ -3,96 +3,94 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
              xmlns:viewmodels="clr-namespace:GoodGovernanceApp.ViewModels">
+    <UserControl.Resources>
+        <DataTemplate x:Key="SidebarNavigationItemTemplate"
+                      DataType="{x:Type viewmodels:NavigationItem}">
+            <Button Command="{Binding DataContext.NavigateTileCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                    CommandParameter="{Binding ViewToken}">
+                <Button.Style>
+                    <Style TargetType="Button" BasedOn="{StaticResource NavButtonStyle}">
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                                <Setter Property="Background" Value="#000000"/>
+                                <Setter Property="Foreground" Value="White"/>
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </Button.Style>
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="12"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <Border Grid.Column="0" Background="white" Width="38" Height="38" CornerRadius="10">
+                        <materialDesign:PackIcon Kind="{Binding Icon}" Foreground="black" Width="20" Height="20"
+                                                 HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Border>
+                    <TextBlock Grid.Column="2" Text="{Binding Name}" VerticalAlignment="Center"
+                               FontSize="14" TextWrapping="Wrap"/>
+                </Grid>
+            </Button>
+        </DataTemplate>
+    </UserControl.Resources>
+
         <!-- Sidebar: Col 0, RowSpan 3 -->
         <Border Background="LightYellow" BorderBrush="LightYellow" BorderThickness="0,0,1,0">
             <Grid>
                 <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto"/>
                     <RowDefinition Height="*"/>
-                    <RowDefinition Height="Auto"/>
                 </Grid.RowDefinitions>
 
-                <!-- Top: Logo and System Name -->
-                <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="24,20,20,10">
-                    <Button Command="{Binding OpenAppProfileCommand}"
-                            ToolTip="Application Profile"
-                            Background="Transparent" BorderThickness="0" Padding="0">
-                        <Border Background="#FFFFFF" CornerRadius="8" MaxHeight="40" MaxWidth="120" ClipToBounds="True">
-                            <!-- Binding the logo to SystemPhotoSource or fallback to icon -->
-                            <Grid>
-                                <materialDesign:PackIcon Kind="BankOutline" Foreground="#000000" Width="24" Height="24" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="{Binding GovPhotoSource, Converter={StaticResource InvBoolToVis}}"/>
-                                <Image Source="{Binding GovPhotoSource}" Stretch="Uniform" Visibility="{Binding GovPhotoSource, Converter={StaticResource NullToVis}}"/>
-                            </Grid>
-                        </Border>
-                    </Button>
-                    <TextBlock Text="GGS" Foreground="Black" FontSize="20" FontWeight="Bold" VerticalAlignment="Center" Margin="12,0,0,0"/>
-                </StackPanel>
-
-                <!-- Middle: Nav Buttons -->
-                <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Background="Transparent" BorderThickness="0">
-                    <StackPanel>
-                        <!-- For the items control, group by "Group" property or just flat list -->
+                <!-- One continuous navigation list: no fixed lower limit or divider. -->
+                <ScrollViewer VerticalScrollBarVisibility="Hidden"
+                              HorizontalScrollBarVisibility="Disabled"
+                              PanningMode="VerticalOnly"
+                              Background="Transparent"
+                              BorderThickness="0">
+                    <StackPanel Margin="0,0,0,16">
                         <TextBlock Text="MODULES" Foreground="Black" FontSize="12" FontWeight="SemiBold" Margin="24,16,24,8"/>
-                        
-                        <ItemsControl ItemsSource="{Binding NavigationItems}">
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate DataType="{x:Type viewmodels:NavigationItem}">
-                                    <Button Style="{StaticResource NavButtonStyle}"
-                                            Command="{Binding DataContext.NavigateTileCommand, RelativeSource={RelativeSource AncestorType=Window}}"
-                                            CommandParameter="{Binding ViewToken}">
-                                        <Grid>
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="Auto"/>
-                                                <ColumnDefinition Width="12"/>
-                                                <ColumnDefinition Width="*"/>
-                                            </Grid.ColumnDefinitions>
-                                            <Border Grid.Column="0" Background="white" Width="38" Height="38" CornerRadius="10">
-                                                <materialDesign:PackIcon Kind="{Binding Icon}" Foreground="black" Width="20" Height="20" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                            </Border>
-                                            <TextBlock Grid.Column="2" Text="{Binding Name}" VerticalAlignment="Center" FontSize="14" TextWrapping="Wrap"/>
-                                        </Grid>
-                                    </Button>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
+
+                        <ItemsControl ItemsSource="{Binding SidebarPrimaryItems}"
+                                      ItemTemplate="{StaticResource SidebarNavigationItemTemplate}"/>
+
+                        <Button Style="{StaticResource NavButtonStyle}"
+                                Command="{Binding OpenSystemsProfileCommand}">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="12"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <Border Grid.Column="0" Background="white" Width="38" Height="38" CornerRadius="10">
+                                    <materialDesign:PackIcon Kind="DatabaseSettings" Foreground="Black" Width="20" Height="20"
+                                                             HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                </Border>
+                                <TextBlock Grid.Column="2" Text="System Profile" VerticalAlignment="Center" FontSize="14"/>
+                            </Grid>
+                        </Button>
+
+                        <ItemsControl ItemsSource="{Binding SidebarTrailingItems}"
+                                      ItemTemplate="{StaticResource SidebarNavigationItemTemplate}"/>
+
+                        <Button Style="{StaticResource NavButtonStyle}"
+                                Command="{Binding LogoutCommand}"
+                                CommandParameter="{Binding ElementName=MainWin}">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="12"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <Border Grid.Column="0" Background="#000000" Width="38" Height="38" CornerRadius="10">
+                                    <materialDesign:PackIcon Kind="Logout" Foreground="white" Width="20" Height="20"
+                                                             HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                </Border>
+                                <TextBlock Grid.Column="2" Text="Logout" VerticalAlignment="Center" FontSize="14"/>
+                            </Grid>
+                        </Button>
                     </StackPanel>
                 </ScrollViewer>
-
-                <!-- Bottom: Divider, Settings, Logout -->
-                <StackPanel Grid.Row="2" Margin="0,0,0,16">
-                    <Border Height="1" Background="#000000" Margin="0,8,0,16"/>
-                    
-                    <Button Style="{StaticResource NavButtonStyle}"
-                            Command="{Binding OpenSystemsProfileCommand}">
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto"/>
-                                <ColumnDefinition Width="12"/>
-                                <ColumnDefinition Width="*"/>
-                            </Grid.ColumnDefinitions>
-                            <Border Grid.Column="0" Background="white" Width="38" Height="38" CornerRadius="10">
-                                <materialDesign:PackIcon Kind="DatabaseSettings" Foreground="Black" Width="20" Height="20" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                            </Border>
-                            <TextBlock Grid.Column="2" Text="System Profile" VerticalAlignment="Center" FontSize="14"/>
-                        </Grid>
-                    </Button>
-
-                    <Button Style="{StaticResource NavButtonStyle}"
-                            Command="{Binding LogoutCommand}"
-                            CommandParameter="{Binding ElementName=MainWin}">
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto"/>
-                                <ColumnDefinition Width="12"/>
-                                <ColumnDefinition Width="*"/>
-                            </Grid.ColumnDefinitions>
-                            <Border Grid.Column="0" Background="#000000" Width="38" Height="38" CornerRadius="10">
-                                <materialDesign:PackIcon Kind="Logout" Foreground="white" Width="20" Height="20" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                            </Border>
-                            <TextBlock Grid.Column="2" Text="Logout" VerticalAlignment="Center" FontSize="14"/>
-                        </Grid>
-                    </Button>
-                </StackPanel>
             </Grid>
         </Border>
 </UserControl>
