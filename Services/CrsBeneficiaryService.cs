@@ -50,6 +50,8 @@ public class CrsBeneficiaryService : ICrsBeneficiaryService
 
         try
         {
+            await _connectivityService.RefreshNowAsync();
+
             if (_connectivityService.IsCrsOnline)
                 return await FetchFromCloudAsync(beneficiaryId);
             else
@@ -94,7 +96,8 @@ public class CrsBeneficiaryService : ICrsBeneficiaryService
         var b = new Beneficiary
         {
             Id                 = reader.GetInt64("id"),
-            ResidentsId        = reader.GetInt64("residents_id"),
+            ResidentsId        = reader.IsDBNull(reader.GetOrdinal("residents_id"))
+                                     ? 0 : reader.GetInt64("residents_id"),
             BeneficiaryId      = reader["beneficiary_id"]?.ToString() ?? "",
             UserId             = reader.IsDBNull(reader.GetOrdinal("user_id"))
                                      ? null : reader.GetInt32("user_id"),
@@ -108,9 +111,11 @@ public class CrsBeneficiaryService : ICrsBeneficiaryService
             AgeRaw             = reader["age"]?.ToString(),
             MaritalStatus      = reader["marital_status"]?.ToString(),
             Address            = reader["address"]?.ToString(),
-            IsPwd              = reader.GetInt32("is_pwd") == 1,
+            IsPwd              = !reader.IsDBNull(reader.GetOrdinal("is_pwd"))
+                                     && reader.GetInt32("is_pwd") == 1,
             PwdIdNo            = reader["pwd_id_no"]?.ToString(),
-            IsSenior           = reader.GetInt32("is_senior") == 1,
+            IsSenior           = !reader.IsDBNull(reader.GetOrdinal("is_senior"))
+                                     && reader.GetInt32("is_senior") == 1,
             SeniorIdNo         = reader["senior_id_no"]?.ToString(),
             DisabilityType     = reader["disability_type"]?.ToString(),
             CauseOfDisability  = reader["cause_of_disability"]?.ToString(),
