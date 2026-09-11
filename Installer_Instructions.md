@@ -1,56 +1,44 @@
-# Good Governance Management System Installer Instructions
+# Good Governance Management System Installer
 
-Since we are targeting a Windows environment, the most straightforward approach to generate a clean "Package Installer" for both the Super Admin and standard User Clients is to use **Inno Setup** to package the published `.NET 8/10 WPF` application.
+The Windows installer is built with Inno Setup and contains a self-contained
+`win-x64` .NET application. Target computers do not need a separate .NET
+installation.
 
-## Prerequisites
-1. Download and install **Inno Setup** (https://jrsoftware.org/isinfo.php).
-2. Install the **.NET 8.0/10.0 Desktop Runtime** on the target machines (or choose self-contained deployment below).
+## Prerequisite
 
-## Step 1: Publish the Application
-We need to generate a standalone build that is separated from development files.
+Install Inno Setup 6 on the build computer.
 
-Open a terminal in the `C:\Users\Asus\Documents\GGS\GoodGovernanceApp` directory and run:
+## Build
 
-```bash
-dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o .\publish
+Open PowerShell in the project directory and run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\build_installer.ps1
 ```
 
-This produces a **self-contained single-file executable** that bundles the .NET runtime — recipients do **NOT** need to install .NET separately. The output will be in the `.\publish` folder.
+The script creates a clean multi-file publish, which is required by the WPF
+resources in this application, and then compiles the installer.
 
-## Step 2: Create the Inno Setup Script (`installer.iss`)
-Create a new file named `installer.iss` in the project root with the following content:
+## Prefilled database configuration
 
-```pascal
-[Setup]
-AppName=Good Governance System
-AppVersion=1.0.0
-DefaultDirName={pf}\GoodGovernanceSystem
-DefaultGroupName=Good Governance System
-OutputDir=.\Installer Output
-OutputBaseFilename=GoodGovernanceSetup
-Compression=lzma2
-SolidCompression=yes
+The installer displays prefilled wizard pages for:
 
-[Files]
-; Copy all published files to the installation directory
-Source: "publish\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+- Online (remote) GGMS database
+- Office Network (LAN) GGMS database
+- Office Network (LAN) CRS database
 
-[Icons]
-; Create Desktop and Start Menu shortcuts pointing to the main executeable
-Name: "{group}\Good Governance System"; Filename: "{app}\GoodGovernanceApp.exe"
-Name: "{commondesktop}\Good Governance System"; Filename: "{app}\GoodGovernanceApp.exe"; Tasks: desktopicon
+After installation, the confirmed settings are written to both the application
+folder and `%AppData%\GoodGovernanceApp\appsettings.json`. Writing the per-user
+copy ensures that reinstalling over an older version refreshes the configuration
+that the application actually loads.
 
-[Tasks]
-Name: "desktopicon"; Description: "Create a &desktop icon"; GroupDescription: "Additional icons:"
-```
+The credentials are intentionally bundled in the installer to meet the prefilled
+deployment requirement. Distribute the installer only to authorized users.
 
-## Step 3: Compile the Installer
-1. Open the `installer.iss` file you just created using the **Inno Setup Compiler**.
-2. Click the **Compile** button (or press `Ctrl+F9`).
-3. Once compiled, an `Installer Output/GoodGovernanceSetup.exe` file will be generated. 
+## Output
 
-## Step 4: Client Distribution
-- You can distribute the generated `GoodGovernanceSetup.exe` to your users.
-- Because we exposed the dual Database Connection settings within the UI (under the "Settings" menu), Super Admins and Users can install the *exact same underlying package*!
-- Upon first launch, the App will automatically use the bundled **Local SQLite database** (`ggms.db`), requiring zero setup or installation of MySQL on the client machine!
-- To enable automatic sync, the Super Admin simply logs in, opens Settings, and verifies the connections: **Online Database (main)** on `194.59.164.58` and the **Network databases** (GGMS + CRS) on `192.168.0.47`, then saves. The system will then seamlessly operate in an offline-first manner, syncing with the online server in the background whenever it is reachable.
+The generated installer is:
+
+`InstallerOutput\GoodGovernanceSetup-1.0.2.exe`
+
+The build script also copies it to the current user's Downloads folder.
