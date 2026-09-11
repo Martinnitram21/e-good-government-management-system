@@ -35,7 +35,7 @@ namespace GoodGovernanceApp.Data
                 using (var connection = new MySqlConnection(connectionString))
                 {
                     await connection.OpenAsync();
-                    return (true, "Remote connection successful!");
+                    return (true, "Online connection successful!");
                 }
             }
             catch (MySqlException ex)
