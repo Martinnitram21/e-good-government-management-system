@@ -39,6 +39,6 @@ deployment requirement. Distribute the installer only to authorized users.
 
 The generated installer is:
 
-`InstallerOutput\GoodGovernanceSetup-1.0.2.exe`
+`InstallerOutput\GoodGovernanceSetup-1.0.6.exe`
 
 The build script also copies it to the current user's Downloads folder.
