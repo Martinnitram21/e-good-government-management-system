@@ -121,7 +121,7 @@ public class DatabaseConfig : IDatabaseConfig
         if (!root.ContainsKey("ConnectionStrings") || root["ConnectionStrings"] is not JsonObject)
             root["ConnectionStrings"] = new JsonObject();
 
-        root["AppSettings"]!["DatabaseMode"] = "Remote";
+        root["AppSettings"]!["DatabaseMode"] = string.IsNullOrWhiteSpace(mode) ? "Remote" : mode;
         root["AppSettings"]!["UseRemoteDatabase"] = true;
         root["ConnectionStrings"]!["RemoteConnection"] = ggmsConnStr;
         if (!string.IsNullOrWhiteSpace(networkConnStr))
