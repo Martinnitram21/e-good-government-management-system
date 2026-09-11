@@ -105,7 +105,7 @@
         <!-- Data Grid -->
         <materialDesign:Card Grid.Row="2" Padding="8">
             <Grid>
-                <DataGrid ItemsSource="{Binding Beneficiaries}"
+                <DataGrid ItemsSource="{Binding BeneficiariesView}"
               AutoGenerateColumns="False"
               CanUserAddRows="False"
               IsReadOnly="True"
@@ -117,7 +117,10 @@
               RowHeight="48"
               EnableRowVirtualization="True"
               EnableColumnVirtualization="True"
+              VirtualizingPanel.IsVirtualizing="True"
+              VirtualizingPanel.VirtualizationMode="Recycling"
               ScrollViewer.CanContentScroll="True"
+              ScrollViewer.IsDeferredScrollingEnabled="True"
               HorizontalAlignment="Stretch"
               VerticalAlignment="Stretch">
 
