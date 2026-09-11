@@ -20,6 +20,13 @@ public partial class CrsBeneficiaryView : UserControl
             return;
 
         _initialLoadStarted = true;
-        await viewModel.LoadAsync();
+        try
+        {
+            await viewModel.LoadAsync();
+        }
+        catch (System.Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[CRS] Initial load failed: {ex}");
+        }
     }
 }
