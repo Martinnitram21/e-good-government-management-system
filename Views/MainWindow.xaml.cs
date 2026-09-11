@@ -61,6 +61,13 @@ public partial class MainWindow : Window
         }
 
         string section = button.CommandParameter as string ?? "Dashboard";
+        if (section is "ConsolidatedTransactions" or "BudgetAllocation")
+        {
+            // These routes open modal selectors rather than replacing the main
+            // content immediately, so they should not invoke the page loader.
+            return;
+        }
+
         ShowGlobalLoadingOverlay($"LOADING {FormatSectionName(section).ToUpperInvariant()}...");
         ScheduleGlobalLoadingOverlayHide(750);
     }
