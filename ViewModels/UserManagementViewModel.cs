@@ -12,10 +12,11 @@ using System.IO;
 using System.Windows.Media.Imaging;
 using System.Linq;
 using System;
+using System.Threading.Tasks;
 
 namespace GoodGovernanceApp.ViewModels;
 
-public class UserManagementViewModel : ViewModelBase
+public class UserManagementViewModel : ViewModelBase, IDisposable
 {
     private readonly AppDbContext _context;
 
@@ -174,6 +175,8 @@ public class UserManagementViewModel : ViewModelBase
     public ICommand RefreshValidateUsersCommand { get; }
     public ICommand UploadPhotoCommand { get; }
     private readonly GoodGovernanceApp.Services.ISyncService? _syncService;
+    private readonly Action<bool> _syncStatusHandler;
+    private bool _disposed;
 
     // ── Constructor ───────────────────────────────────────────────────────────
     public UserManagementViewModel(AppDbContext context, GoodGovernanceApp.Services.ISyncService? syncService = null)
@@ -181,7 +184,7 @@ public class UserManagementViewModel : ViewModelBase
         _context = context;
         _syncService = syncService;
 
-        LoadData();
+        _ = LoadDataAsync();
 
         _usersView = CollectionViewSource.GetDefaultView(Users);
         _usersView.Filter = FilterUsers;
@@ -196,34 +199,69 @@ public class UserManagementViewModel : ViewModelBase
 
         if (_syncService != null)
         {
-            _syncService.OnSyncStatusChanged += (isSyncing) =>
+            // Stored handler so it can be unsubscribed (leak fix). Reload runs
+            // off the UI thread; results marshal back via BeginInvoke.
+            _syncStatusHandler = (isSyncing) =>
             {
-                if (!isSyncing)
+                if (!isSyncing && !_disposed)
                 {
-                    System.Windows.Application.Current?.Dispatcher.Invoke(LoadData);
+                    _ = LoadDataAsync();
                 }
             };
+            _syncService.OnSyncStatusChanged += _syncStatusHandler;
+        }
+        else
+        {
+            _syncStatusHandler = (_) => { };
         }
     }
 
-    // ── Data Loading ──────────────────────────────────────────────────────────
-    private void LoadData()
+    public void Dispose()
     {
+        if (_disposed) return;
+        _disposed = true;
+        if (_syncService != null)
+        {
+            try { _syncService.OnSyncStatusChanged -= _syncStatusHandler; } catch { }
+        }
+        try { _context.Dispose(); } catch { }
+    }
+
+    // ── Data Loading ──────────────────────────────────────────────────────────
+    // Async + NoTracking so the Users grid never blocks the UI thread and the
+    // change tracker doesn't balloon on large user tables. Same data as before.
+    private async Task LoadDataAsync()
+    {
+        List<User> userList;
         try
         {
-            List<User> userList;
-            try
+            userList = await _context.Users
+                .AsNoTracking()
+                .Include(u => u.Office)
+                .Include(u => u.ValidationInfo)
+                .ToListAsync();
+        }
+        catch
+        {
+            try { userList = await _context.Users.AsNoTracking().ToListAsync(); }
+            catch (Exception ex)
             {
-                userList = _context.Users
-                    .Include(u => u.Office)
-                    .Include(u => u.ValidationInfo)
-                    .ToList();
+                System.Diagnostics.Debug.WriteLine($"[UserManagementViewModel] LoadData Error: {ex.Message}");
+                return;
             }
-            catch
-            {
-                userList = _context.Users.ToList();
-            }
+        }
 
+        List<Office> offcs;
+        try { offcs = await _context.Offices.AsNoTracking().OrderBy(d => d.Name).ToListAsync(); }
+        catch { offcs = new List<Office>(); }
+
+        List<DepartmentRole> roles;
+        try { roles = await _context.DepartmentRoles.AsNoTracking().OrderBy(r => r.Name).ToListAsync(); }
+        catch { roles = new List<DepartmentRole>(); }
+
+        System.Windows.Application.Current?.Dispatcher.BeginInvoke(new Action(() =>
+        {
+            if (_disposed) return;
             Users.Clear();
             foreach (var user in userList)
                 Users.Add(user);
@@ -232,29 +270,20 @@ public class UserManagementViewModel : ViewModelBase
             _usersView.Filter = FilterUsers;
             _usersView.Refresh();
 
-            try
-            {
-                var offcs = _context.Offices.OrderBy(d => d.Name).ToList();
-                Offices.Clear();
-                foreach (var d in offcs) Offices.Add(d);
-            }
-            catch { }
+            Offices.Clear();
+            foreach (var d in offcs) Offices.Add(d);
 
-            try
-            {
-                var roles = _context.DepartmentRoles.OrderBy(r => r.Name).ToList();
-                _allRoles.Clear();
-                foreach (var r in roles) _allRoles.Add(r);
-            }
-            catch { }
+            _allRoles.Clear();
+            foreach (var r in roles) _allRoles.Add(r);
 
             RefreshFilteredRoles();
             LoadValidateUsers();
-        }
-        catch (Exception ex)
-        {
-            System.Diagnostics.Debug.WriteLine($"[UserManagementViewModel] LoadData Error: {ex.Message}");
-        }
+        }));
+    }
+
+    private void LoadData()
+    {
+        _ = LoadDataAsync();
     }
 
     private void LoadValidateUsers()
