@@ -225,13 +225,14 @@ public class MainViewModel : ViewModelBase, IDisposable
             OnPropertyChanged(nameof(NetworkStatusText));
             OnPropertyChanged(nameof(CrsStatusText));
             OnPropertyChanged(nameof(ActiveDatabaseStatusText));
+            OnPropertyChanged(nameof(ActiveConnectionIsOnline));
         }
     }
 
     // ── Single active-database status ─────────────────────────────────────
     // The footer shows ONLY the database the system is currently using.
-    // Mode comes from AppSettings:DatabaseMode (Remote = Online, Network = LAN).
-    private string _activeDatabaseMode = "ONLINE";
+    // Mode comes from AppSettings:DatabaseMode (Remote vs Network/LAN).
+    private string _activeDatabaseMode = "REMOTE";
     public string ActiveDatabaseMode
     {
         get => _activeDatabaseMode;
@@ -257,9 +258,9 @@ public class MainViewModel : ViewModelBase, IDisposable
         if (mode.Equals("Network", System.StringComparison.OrdinalIgnoreCase)
             || mode.Equals("LAN", System.StringComparison.OrdinalIgnoreCase)
             || mode.Equals("LanConnection", System.StringComparison.OrdinalIgnoreCase))
-            return "NETWORK (LAN)";
-        // Remote connection is the Online (cloud) database.
-        return "ONLINE";
+            return "NETWORK";
+        // Remote connection is the active database.
+        return "REMOTE";
     }
 
     // Kept for backward-compat (background checks still run for sync/reports),
