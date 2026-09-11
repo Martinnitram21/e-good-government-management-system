@@ -251,8 +251,8 @@ public class MainViewModel : ViewModelBase, IDisposable
 
     // ── Single active-database status ─────────────────────────────────────
     // The footer shows ONLY the database the system is currently using.
-    // Mode comes from AppSettings:DatabaseMode (Remote vs Network/LAN).
-    private string _activeDatabaseMode = "REMOTE";
+    // Mode comes from AppSettings:DatabaseMode (Online vs Network/LAN).
+    private string _activeDatabaseMode = "ONLINE";
     public string ActiveDatabaseMode
     {
         get => _activeDatabaseMode;
@@ -265,7 +265,7 @@ public class MainViewModel : ViewModelBase, IDisposable
     {
         get
         {
-            string mode = App.Config?["AppSettings:DatabaseMode"] ?? ActiveDatabaseMode ?? "Remote";
+            string mode = App.Config?["AppSettings:DatabaseMode"] ?? ActiveDatabaseMode ?? "Online";
             return mode.Equals("Network", System.StringComparison.OrdinalIgnoreCase)
                 || mode.Equals("LAN", System.StringComparison.OrdinalIgnoreCase)
                 || mode.Equals("LanConnection", System.StringComparison.OrdinalIgnoreCase);
@@ -274,13 +274,13 @@ public class MainViewModel : ViewModelBase, IDisposable
 
     private static string ResolveActiveModeLabel()
     {
-        string mode = App.Config?["AppSettings:DatabaseMode"] ?? "Remote";
+        string mode = App.Config?["AppSettings:DatabaseMode"] ?? "Online";
         if (mode.Equals("Network", System.StringComparison.OrdinalIgnoreCase)
             || mode.Equals("LAN", System.StringComparison.OrdinalIgnoreCase)
             || mode.Equals("LanConnection", System.StringComparison.OrdinalIgnoreCase))
             return "NETWORK";
-        // Remote connection is the active database.
-        return "REMOTE";
+        // Online connection is the active database.
+        return "ONLINE";
     }
 
     // Kept for backward-compat (background checks still run for sync/reports),
