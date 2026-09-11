@@ -1,6 +1,5 @@
 using System;
 using System.Net.NetworkInformation;
-using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
 using GoodGovernanceApp.Data;
@@ -14,6 +13,7 @@ public interface IConnectivityService
     bool IsCrsOnline { get; }
     bool IsNetworkOnline { get; }
     bool IsInternetAvailable { get; }
+    bool HasChecked { get; }
     event Action<bool>? OnConnectionStatusChanged;
     void StartMonitoring();
     void SyncCurrentStatus();
@@ -26,8 +26,12 @@ public class ConnectivityService : IConnectivityService
     private volatile bool _isNetworkOnline = false;
     private volatile bool _isCrsOnline = false;
     private volatile bool _isInternetAvailable = false;
+    private volatile bool _hasChecked = false;
     private readonly IDatabaseConfig _dbConfig;
     private readonly CancellationTokenSource _cts = new();
+    private readonly SemaphoreSlim _refreshGate = new(1, 1);
+    private DateTime _lastRefreshUtc = DateTime.MinValue;
+    private int _monitorStarted;
 
     public event Action<bool>? OnConnectionStatusChanged;
 
@@ -35,6 +39,7 @@ public class ConnectivityService : IConnectivityService
     public bool IsNetworkOnline => _isNetworkOnline;
     public bool IsCrsOnline => _isCrsOnline;
     public bool IsInternetAvailable => _isInternetAvailable;
+    public bool HasChecked => _hasChecked;
 
     public ConnectivityService(IDatabaseConfig dbConfig)
     {
@@ -50,17 +55,21 @@ public class ConnectivityService : IConnectivityService
 
     public void StartMonitoring()
     {
+        if (Interlocked.Exchange(ref _monitorStarted, 1) == 1)
+            return;
+
         _ = Task.Run(async () =>
         {
             // Initial check
             await RefreshNowAsync();
 
-            // Periodic polling every 15 seconds
+            // Network-change events refresh immediately; periodic polling is a
+            // lighter safety net that avoids continuous pressure on DB servers.
             while (!_cts.Token.IsCancellationRequested)
             {
                 try
                 {
-                    await Task.Delay(TimeSpan.FromSeconds(15), _cts.Token);
+                    await Task.Delay(TimeSpan.FromMinutes(1), _cts.Token);
                     await RefreshNowAsync();
                 }
                 catch (OperationCanceledException)
@@ -79,21 +88,40 @@ public class ConnectivityService : IConnectivityService
 
     public async Task<bool> RefreshNowAsync()
     {
-        bool wasOnline = _isOnline;
-        _isInternetAvailable = NetworkInterface.GetIsNetworkAvailable();
+        await _refreshGate.WaitAsync(_cts.Token);
+        try
+        {
+            // Network-change events can arrive in bursts. Reuse a very recent
+            // result instead of opening several identical sets of DB connections.
+            if (DateTime.UtcNow - _lastRefreshUtc < TimeSpan.FromSeconds(2))
+                return _isOnline;
 
-        var remoteTask = CheckRemoteAsync();
-        var networkTask = CheckNetworkAsync();
-        var crsTask = CheckCrsAsync();
-        await Task.WhenAll(remoteTask, networkTask, crsTask);
+            bool wasOnline = _isOnline;
+            bool wasNetworkOnline = _isNetworkOnline;
+            bool wasCrsOnline = _isCrsOnline;
+            bool hadChecked = _hasChecked;
+            _isInternetAvailable = NetworkInterface.GetIsNetworkAvailable();
 
-        _isOnline = remoteTask.Result;
-        _isNetworkOnline = networkTask.Result;
-        _isCrsOnline = crsTask.Result;
+            var remoteTask = CheckRemoteAsync();
+            var networkTask = CheckNetworkAsync();
+            var crsTask = CheckCrsAsync();
+            await Task.WhenAll(remoteTask, networkTask, crsTask);
 
-        if (wasOnline != _isOnline)
-            OnConnectionStatusChanged?.Invoke(_isOnline);
-        return _isOnline;
+            _isOnline = await remoteTask;
+            _isNetworkOnline = await networkTask;
+            _isCrsOnline = await crsTask;
+            _hasChecked = true;
+            _lastRefreshUtc = DateTime.UtcNow;
+
+            if (!hadChecked || wasOnline != _isOnline ||
+                wasNetworkOnline != _isNetworkOnline || wasCrsOnline != _isCrsOnline)
+                OnConnectionStatusChanged?.Invoke(_isOnline);
+            return _isOnline;
+        }
+        finally
+        {
+            _refreshGate.Release();
+        }
     }
 
     // ── Remote GGMS (194.59.164.58, main online DB) ──────────────────────────
@@ -105,25 +133,7 @@ public class ConnectivityService : IConnectivityService
             if (string.IsNullOrWhiteSpace(connStr))
                 return false;
 
-            string host = "194.59.164.58";
-            int port = 3306;
-
-            try
-            {
-                var builder = new MySqlConnectionStringBuilder(connStr);
-                if (!string.IsNullOrWhiteSpace(builder.Server))
-                    host = builder.Server;
-                if (builder.Port > 0)
-                    port = (int)builder.Port;
-            }
-            catch { }
-
-            // Quick TCP check (3 second timeout)
-            bool tcpOk = await TcpPingAsync(host, port, 3000);
-            if (!tcpOk)
-                return false;
-
-            // Direct connection verification with 5s timeout
+            // A database open is already a complete reachability check.
             var testBuilder = new MySqlConnectionStringBuilder(connStr)
             {
                 ConnectionTimeout = 5,
@@ -148,23 +158,6 @@ public class ConnectivityService : IConnectivityService
         {
             string connStr = _dbConfig.NetworkConnectionString;
             if (string.IsNullOrWhiteSpace(connStr))
-                return false;
-
-            string host = "192.168.0.47";
-            int port = 3306;
-
-            try
-            {
-                var builder = new MySqlConnectionStringBuilder(connStr);
-                if (!string.IsNullOrWhiteSpace(builder.Server))
-                    host = builder.Server;
-                if (builder.Port > 0)
-                    port = (int)builder.Port;
-            }
-            catch { }
-
-            bool tcpOk = await TcpPingAsync(host, port, 3000);
-            if (!tcpOk)
                 return false;
 
             var testBuilder = new MySqlConnectionStringBuilder(connStr)
@@ -193,23 +186,6 @@ public class ConnectivityService : IConnectivityService
             if (string.IsNullOrWhiteSpace(connStr))
                 return false;
 
-            string host = "192.168.0.47";
-            int port = 3306;
-
-            try
-            {
-                var builder = new MySqlConnectionStringBuilder(connStr);
-                if (!string.IsNullOrWhiteSpace(builder.Server))
-                    host = builder.Server;
-                if (builder.Port > 0)
-                    port = (int)builder.Port;
-            }
-            catch { }
-
-            bool tcpOk = await TcpPingAsync(host, port, 3000);
-            if (!tcpOk)
-                return false;
-
             var testBuilder = new MySqlConnectionStringBuilder(connStr)
             {
                 ConnectionTimeout = 5,
@@ -227,27 +203,4 @@ public class ConnectivityService : IConnectivityService
         }
     }
 
-    // ── TCP Ping helper ───────────────────────────────────────────────────────
-    private static async Task<bool> TcpPingAsync(string host, int port, int timeoutMs = 3000)
-    {
-        try
-        {
-            using var client = new TcpClient();
-            using var cts = new CancellationTokenSource(timeoutMs);
-            var connectTask = client.ConnectAsync(host, port);
-            var delayTask = Task.Delay(timeoutMs, cts.Token);
-
-            var completed = await Task.WhenAny(connectTask, delayTask);
-            if (completed == connectTask && client.Connected)
-            {
-                cts.Cancel();
-                return true;
-            }
-            return false;
-        }
-        catch
-        {
-            return false;
-        }
-    }
 }
