@@ -159,11 +159,26 @@ public class AppDbContext : DbContext
         modelBuilder.Entity<ProjectDetail>(entity => { entity.ToTable("project_details"); entity.HasKey(p => p.Id); });
 
         // ── Legacy Retained Relations ─────────────────────────────────────────
-        modelBuilder.Entity<Parameter>().ToTable("parameters");
-        modelBuilder.Entity<Category>().ToTable("categories");
+        modelBuilder.Entity<Parameter>(entity =>
+        {
+            entity.ToTable("parameters");
+            entity.Property(p => p.UpdatedAt).HasColumnName("UpdatedAt");
+        });
+        modelBuilder.Entity<Category>(entity =>
+        {
+            entity.ToTable("categories");
+            entity.Property(c => c.UpdatedAt).HasColumnName("UpdatedAt");
+        });
+        modelBuilder.Entity<Budget>().ToTable("budgets");
         modelBuilder.Entity<Budget>().HasOne(b => b.Category).WithMany(c => c.Budgets).HasForeignKey(b => b.CategoryId);
         modelBuilder.Entity<Budget>().HasOne(b => b.Office).WithMany().HasForeignKey(b => b.OfficeId).OnDelete(DeleteBehavior.SetNull);
-     
+
+        // The hosted MariaDB schema uses these established lowercase names.
+        modelBuilder.Entity<DepartmentRole>().ToTable("departmentroles");
+        modelBuilder.Entity<UploadedFile>().ToTable("uploadedfiles");
+        modelBuilder.Entity<Evaluation>().ToTable("evaluations");
+        modelBuilder.Entity<SystemLog>().ToTable("systemlogs");
+
         modelBuilder.Entity<SystemLog>().HasOne(l => l.User).WithMany().HasForeignKey(l => l.UserId).OnDelete(DeleteBehavior.SetNull);
         modelBuilder.Entity<User>().HasOne(u => u.Office).WithMany(o => o.Users).HasForeignKey(u => u.OfficeId).OnDelete(DeleteBehavior.SetNull);
         modelBuilder.Entity<DepartmentRole>().HasOne(dr => dr.Office).WithMany(o => o.Roles).HasForeignKey(dr => dr.OfficeId).OnDelete(DeleteBehavior.Cascade);
