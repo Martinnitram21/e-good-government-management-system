@@ -121,7 +121,17 @@ public partial class App : Application
                 {
                     var dbConfig = serviceProvider.GetRequiredService<IDatabaseConfig>();
                     var connectionString = dbConfig.ConnectionString;
-                    options.UseMySql(connectionString, ServerVersion.AutoDetect(connectionString));
+                    // Avoid ServerVersion.AutoDetect here: every transient DbContext
+                    // creation otherwise performs an extra synchronous network round-trip.
+                    options.UseMySql(
+                        connectionString,
+                        new MySqlServerVersion(new Version(8, 0, 31)),
+                        mysqlOptions => mysqlOptions
+                            .EnableRetryOnFailure(
+                                maxRetryCount: 3,
+                                maxRetryDelay: TimeSpan.FromSeconds(2),
+                                errorNumbersToAdd: null)
+                            .CommandTimeout(30));
                 }, ServiceLifetime.Transient, ServiceLifetime.Transient);
 
                 services.AddDbContext<CloudDbContext>((serviceProvider, options) =>
@@ -130,7 +140,15 @@ public partial class App : Application
                     {
                         var dbConfig = serviceProvider.GetRequiredService<IDatabaseConfig>();
                         var connStr = dbConfig.ConnectionString;
-                        options.UseMySql(connStr, new MySqlServerVersion(new Version(8, 0, 31)));
+                        options.UseMySql(
+                            connStr,
+                            new MySqlServerVersion(new Version(8, 0, 31)),
+                            mysqlOptions => mysqlOptions
+                                .EnableRetryOnFailure(
+                                    maxRetryCount: 3,
+                                    maxRetryDelay: TimeSpan.FromSeconds(2),
+                                    errorNumbersToAdd: null)
+                                .CommandTimeout(30));
                     }
                     catch
                     {
