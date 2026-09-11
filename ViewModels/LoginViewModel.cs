@@ -8,6 +8,7 @@ using System;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Input;
+using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Linq;
 
@@ -21,11 +22,12 @@ public class LoginViewModel : ViewModelBase
     private string _errorMessage = string.Empty;
     private bool _isLoggingIn = false;
     private bool _isPasswordVisible = false;
+    private bool _isRememberMe = false;
     private string _governanceName = "Good Governance Management System";
-    private BitmapImage? _logoSource;
+    private ImageSource? _logoSource;
     private string _address = string.Empty;
     private readonly GoodGovernanceApp.Services.SessionService _sessionService;
-    private BitmapImage? _systemPhotoSource;
+    private ImageSource? _systemPhotoSource;
 
     // ── Properties ───────────────────────────────────────────────────────────
     public string Username
@@ -58,13 +60,19 @@ public class LoginViewModel : ViewModelBase
         set { _isPasswordVisible = value; OnPropertyChanged(); }
     }
 
+    public bool IsRememberMe
+    {
+        get => _isRememberMe;
+        set { _isRememberMe = value; OnPropertyChanged(); }
+    }
+
     public string GovernanceName
     {
         get => _governanceName;
         set { _governanceName = value; OnPropertyChanged(); }
     }
 
-    public BitmapImage? LogoSource
+    public ImageSource? LogoSource
     {
         get => _logoSource;
         set { _logoSource = value; OnPropertyChanged(); }
@@ -76,7 +84,7 @@ public class LoginViewModel : ViewModelBase
         set { _address = value; OnPropertyChanged(); }
     }
 
-    public BitmapImage? SystemPhotoSource
+    public ImageSource? SystemPhotoSource
     {
         get => _systemPhotoSource;
         set { _systemPhotoSource = value; OnPropertyChanged(); }
@@ -85,6 +93,7 @@ public class LoginViewModel : ViewModelBase
     // ── Commands ─────────────────────────────────────────────────────────────
     public ICommand LoginCommand { get; }
     public ICommand OpenDbSettingsCommand { get; }
+    public ICommand ForgotPasswordCommand { get; }
     public ICommand CheatCommand { get; }
 
     private readonly IServiceProvider _serviceProvider;
@@ -98,8 +107,15 @@ public class LoginViewModel : ViewModelBase
         _dbHelper = dbHelper;
 
         LoginCommand = new RelayCommand(async p => await ExecuteLoginAsync(p), CanExecuteLogin);
-        OpenDbSettingsCommand = new RelayCommand(_ => new DatabaseSettingsWindow().ShowDialog());
+        OpenDbSettingsCommand = new RelayCommand(_ => ModalHelper.Show(new DatabaseSettingsWindow()));
+        ForgotPasswordCommand = new RelayCommand(_ => MessageBox.Show(
+            "Please contact your system administrator to reset your account password.",
+            "Forgot Password",
+            MessageBoxButton.OK,
+            MessageBoxImage.Information));
         CheatCommand = new RelayCommand(_ => ExecuteCheat());
+
+        LoadRememberedUsername();
 
         _ = LoadApplicationProfileAsync();
         _ = LoadSystemPhotoAsync();
@@ -176,6 +192,7 @@ public class LoginViewModel : ViewModelBase
             // ── OTP Check removed per user request ───────────────────────────
 
             // ── Login success ────────────────────────────────────────────────
+            PersistRememberedUsername();
             _sessionService.CurrentUser = user;
 
             var mainWindow = _serviceProvider.GetService(typeof(MainWindow)) as MainWindow;
@@ -208,6 +225,48 @@ public class LoginViewModel : ViewModelBase
     }
 
     // ── Application Profile ───────────────────────────────────────────────────
+    private static string RememberedUserFile => System.IO.Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "GoodGovernanceApp",
+        "remembered-user.txt");
+
+    private void LoadRememberedUsername()
+    {
+        try
+        {
+            if (!System.IO.File.Exists(RememberedUserFile)) return;
+
+            Username = System.IO.File.ReadAllText(RememberedUserFile).Trim();
+            IsRememberMe = !string.IsNullOrWhiteSpace(Username);
+        }
+        catch
+        {
+            // Remember-me is optional and must never prevent login.
+        }
+    }
+
+    private void PersistRememberedUsername()
+    {
+        try
+        {
+            if (IsRememberMe)
+            {
+                string? directory = System.IO.Path.GetDirectoryName(RememberedUserFile);
+                if (!string.IsNullOrEmpty(directory))
+                    System.IO.Directory.CreateDirectory(directory);
+                System.IO.File.WriteAllText(RememberedUserFile, Username.Trim());
+            }
+            else if (System.IO.File.Exists(RememberedUserFile))
+            {
+                System.IO.File.Delete(RememberedUserFile);
+            }
+        }
+        catch
+        {
+            // Remember-me is optional and must never prevent login.
+        }
+    }
+
     private async Task LoadApplicationProfileAsync()
     {
         try
@@ -232,11 +291,28 @@ public class LoginViewModel : ViewModelBase
 
             await Task.Run(() =>
             {
-                BitmapImage? img = null;
+                ImageSource? img = null;
+
+                // 0. Bundled login seal wins when present.
+                string? loginFile = ImageHelper.ResolveFilePath("login.png");
+                if (!string.IsNullOrEmpty(loginFile))
+                    img = ImageHelper.LoadLogoSafe(loginFile);
+                if (img == null)
+                    img = ImageHelper.LoadLogoSafe("pack://application:,,,/GoodGovernanceApp;component/Assets/Images/login.png");
+
+                // 0b. Bundled Sulop seal fallback (if ever added).
+                if (img == null)
+                {
+                    string? sealFile = ImageHelper.ResolveFilePath("sulop_seal.png");
+                    if (!string.IsNullOrEmpty(sealFile))
+                        img = ImageHelper.LoadLogoSafe(sealFile);
+                    if (img == null)
+                        img = ImageHelper.LoadLogoSafe("pack://application:,,,/GoodGovernanceApp;component/Assets/Images/sulop_seal.png");
+                }
 
                 // 1. Try DB path first if present
-                if (!string.IsNullOrWhiteSpace(logoAddressFromDb))
-                    img = ImageHelper.LoadBitmapSafe(logoAddressFromDb);
+                if (img == null && !string.IsNullOrWhiteSpace(logoAddressFromDb))
+                    img = ImageHelper.LoadLogoSafe(logoAddressFromDb);
 
                 // 2. Try common filenames or any image in Assets/Images / AppData
                 if (img == null)
@@ -246,13 +322,13 @@ public class LoginViewModel : ViewModelBase
                         ?? ImageHelper.ResolveFilePath("logo.jpg");
 
                     if (!string.IsNullOrEmpty(foundFile))
-                        img = ImageHelper.LoadBitmapSafe(foundFile);
+                        img = ImageHelper.LoadLogoSafe(foundFile);
                 }
 
                 // 3. Fallback to embedded pack URI or default icon
                 if (img == null)
                 {
-                    img = ImageHelper.LoadBitmapSafe("pack://application:,,,/GoodGovernanceApp;component/Assets/Images/company_profile_logo.jpg",
+                    img = ImageHelper.LoadLogoSafe("pack://application:,,,/GoodGovernanceApp;component/Assets/Images/company_profile_logo.jpg",
                                                     "pack://application:,,,/GoodGovernanceApp;component/Assets/Images/ggms.ico");
                 }
 
@@ -275,18 +351,18 @@ public class LoginViewModel : ViewModelBase
         {
             await Task.Run(() =>
             {
-                BitmapImage? img = null;
+                ImageSource? img = null;
 
                 string? foundFile = ImageHelper.ResolveFilePath("system_profile.png")
                     ?? ImageHelper.ResolveFilePath("system_profile.jpg")
                     ?? ImageHelper.ResolveFilePath("system.png");
 
                 if (!string.IsNullOrEmpty(foundFile))
-                    img = ImageHelper.LoadBitmapSafe(foundFile);
+                    img = ImageHelper.LoadLogoSafe(foundFile);
 
                 if (img == null)
                 {
-                    img = ImageHelper.LoadBitmapSafe("pack://application:,,,/GoodGovernanceApp;component/Assets/Images/system_profile.png");
+                    img = ImageHelper.LoadLogoSafe("pack://application:,,,/GoodGovernanceApp;component/Assets/Images/system_profile.png");
                 }
 
                 if (img != null)
