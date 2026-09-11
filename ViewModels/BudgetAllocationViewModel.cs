@@ -381,7 +381,7 @@ public class BudgetAllocationViewModel : ViewModelBase
         {
             Owner = System.Windows.Application.Current.Windows.OfType<Views.MainWindow>().FirstOrDefault()
         };
-        window.ShowDialog();
+        GoodGovernanceApp.Utilities.ModalHelper.Show(window);
     }
 
     private void OpenAddProjectWindow()
@@ -404,7 +404,7 @@ public class BudgetAllocationViewModel : ViewModelBase
             vm.SetContext(year, SelectedOffice.OfficeCode);
         }
 
-        bool? result = window.ShowDialog();
+        bool? result = GoodGovernanceApp.Utilities.ModalHelper.Show(window);
 
         if (result == true)
         {
