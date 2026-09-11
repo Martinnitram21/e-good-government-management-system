@@ -33,24 +33,17 @@ public static class ModalHelper
         };
 
         // A WPF window cannot be shown maximized while ShowActivated is false.
-        // Size the non-activating overlay to the owner instead; this keeps the
-        // complete application dimmed without triggering that invalid state.
+        // Use explicit virtual-screen bounds instead. Unlike owner.ActualWidth /
+        // ActualHeight, these bounds are not clipped to the content area and do
+        // not leave uncovered strips when Windows display scaling is enabled.
         overlay.WindowState = WindowState.Normal;
-        if (owner != null && owner.ActualWidth > 0 && owner.ActualHeight > 0)
-        {
+        if (owner != null)
             overlay.Owner = owner;
-            overlay.Left = owner.Left;
-            overlay.Top = owner.Top;
-            overlay.Width = owner.ActualWidth;
-            overlay.Height = owner.ActualHeight;
-        }
-        else
-        {
-            overlay.Left = SystemParameters.WorkArea.Left;
-            overlay.Top = SystemParameters.WorkArea.Top;
-            overlay.Width = SystemParameters.WorkArea.Width;
-            overlay.Height = SystemParameters.WorkArea.Height;
-        }
+
+        overlay.Left = SystemParameters.VirtualScreenLeft;
+        overlay.Top = SystemParameters.VirtualScreenTop;
+        overlay.Width = SystemParameters.VirtualScreenWidth;
+        overlay.Height = SystemParameters.VirtualScreenHeight;
         overlay.Show();
 
         overlay.BeginAnimation(Window.OpacityProperty,
