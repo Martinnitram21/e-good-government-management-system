@@ -480,6 +480,10 @@ public class MainViewModel : ViewModelBase, IDisposable
         IsNetworkOnline = _connectivityService.IsNetworkOnline;
         IsCrsOnline = _connectivityService.IsCrsOnline;
         ConnectionCheckCompleted = _connectivityService.HasChecked;
+        ActiveDatabaseMode = ResolveActiveModeLabel();
+        OnPropertyChanged(nameof(ActiveDatabaseStatusText));
+        OnPropertyChanged(nameof(ActiveConnectionIsOnline));
+        OnPropertyChanged(nameof(IsActiveModeNetwork));
     }
 
     // ── tile navigation ───────────────────────────────────────────────────────
