@@ -9,6 +9,7 @@
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <SelfContained>true</SelfContained>
     <ApplicationIcon>Assets\Images\ggms.ico</ApplicationIcon>
+    <Version>1.0.2</Version>
   </PropertyGroup>
 
   <ItemGroup>
