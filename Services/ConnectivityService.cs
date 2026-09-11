@@ -79,6 +79,7 @@ public class ConnectivityService : IConnectivityService
 
     public async Task<bool> RefreshNowAsync()
     {
+        bool wasOnline = _isOnline;
         _isInternetAvailable = NetworkInterface.GetIsNetworkAvailable();
 
         var remoteTask = CheckRemoteAsync();
@@ -90,7 +91,8 @@ public class ConnectivityService : IConnectivityService
         _isNetworkOnline = networkTask.Result;
         _isCrsOnline = crsTask.Result;
 
-        OnConnectionStatusChanged?.Invoke(_isOnline);
+        if (wasOnline != _isOnline)
+            OnConnectionStatusChanged?.Invoke(_isOnline);
         return _isOnline;
     }
 
