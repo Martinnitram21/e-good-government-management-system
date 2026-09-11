@@ -8,7 +8,7 @@ using MaterialDesignThemes.Wpf;
 namespace GoodGovernanceApp.Utilities;
 
 /// <summary>
-/// Wraps every app-owned dialog in one themed main container with a dedicated
+/// Wraps every app-owned dialog in one themed square-edged container with a dedicated
 /// title bar and custom minimize, maximize/restore, and close controls.
 /// </summary>
 public static class ModalChrome
@@ -48,7 +48,7 @@ public static class ModalChrome
         {
             Background = surfaceBrush,
             BorderThickness = new Thickness(0),
-            CornerRadius = new CornerRadius(14),
+            CornerRadius = new CornerRadius(0),
             ClipToBounds = true
         };
 
@@ -140,7 +140,7 @@ public static class ModalChrome
             bool maximized = dialog.WindowState == WindowState.Maximized;
             maximizeIcon.Kind = maximized ? PackIconKind.WindowRestore : PackIconKind.WindowMaximize;
             maximizeButton.ToolTip = maximized ? "Restore" : "Maximize";
-            frame.CornerRadius = maximized ? new CornerRadius(0) : new CornerRadius(14);
+            frame.CornerRadius = new CornerRadius(0);
         };
 
         dialog.Content = frame;
