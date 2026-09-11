@@ -22,9 +22,17 @@ public interface ISyncService
 
 public class SyncService : ISyncService
 {
-    private static bool UsesDirectRemoteDatabase => true;
+    // e-KARD pattern adapted for GGMS (both sides are MySQL):
+    //   AppDbContext   = Online/Remote (194.59.164.58 u621755393_ggms) — the fully-used primary.
+    //   CloudDbContext = Network/LAN  (192.168.0.47 ggms_db, prefilled) — the office server.
+    // The footer Sync button syncs Online <-> Network with SyncId + UpdatedAt last-write-wins.
+    // Online credentials and SQLite are never touched by sync.
     private bool _isSyncing = false;
     private readonly SemaphoreSlim _syncGate = new(1, 1);
+    // Schema migrate/repair runs once per process. Re-running 30x ALTERs + 12x
+    // orphan-repair scans on every 5-min sync is pure WAN overhead.
+    private static int _schemaEnsured;
+    private static int _repairDone;
     public event Action<bool>?   OnSyncStatusChanged;
     public event Action<string>? OnSyncProgress;
     public event Action<List<string>>? OnSyncErrorsCollected;
@@ -134,17 +142,17 @@ public class SyncService : ISyncService
             if (_cache.TryGetValue(cacheKey, out var cached))
                 return cached;
 
+            // Both sides are MySQL (Online + Network), so quoting/cast are identical.
+            // sourceIsMySql only selects direction: true = Network→Online, false = Online→Network.
             var sourceConnection = sourceIsMySql ? _cloudConnection : _localConnection;
             var targetConnection = sourceIsMySql ? _localConnection : _cloudConnection;
 
-            string sourceQuote = sourceIsMySql ? "`" : "\"";
-            string targetQuote = sourceIsMySql ? "\"" : "`";
-            string targetCast = sourceIsMySql ? "TEXT" : "CHAR";
+            const string Q = "`";
 
             using var syncIdCommand = sourceConnection.CreateCommand();
             syncIdCommand.CommandText =
-                $"SELECT {sourceQuote}SyncId{sourceQuote} FROM {sourceQuote}{principalTable}{sourceQuote} " +
-                $"WHERE {sourceQuote}{principalKeyColumn}{sourceQuote} = @sourceKey LIMIT 1";
+                $"SELECT {Q}SyncId{Q} FROM {Q}{principalTable}{Q} " +
+                $"WHERE {Q}{principalKeyColumn}{Q} = @sourceKey LIMIT 1";
             AddParameter(syncIdCommand, "@sourceKey", sourceKey);
             var syncIdValue = await syncIdCommand.ExecuteScalarAsync();
             if (syncIdValue == null || syncIdValue == DBNull.Value || string.IsNullOrWhiteSpace(syncIdValue.ToString()))
@@ -155,8 +163,8 @@ public class SyncService : ISyncService
 
             using var targetKeyCommand = targetConnection.CreateCommand();
             targetKeyCommand.CommandText =
-                $"SELECT {targetQuote}{principalKeyColumn}{targetQuote} FROM {targetQuote}{principalTable}{targetQuote} " +
-                $"WHERE LOWER(CAST({targetQuote}SyncId{targetQuote} AS {targetCast})) = @syncId LIMIT 1";
+                $"SELECT {Q}{principalKeyColumn}{Q} FROM {Q}{principalTable}{Q} " +
+                $"WHERE LOWER(CAST({Q}SyncId{Q} AS CHAR)) = @syncId LIMIT 1";
             AddParameter(targetKeyCommand, "@syncId", syncIdValue.ToString()!.ToLowerInvariant());
             var targetKey = await targetKeyCommand.ExecuteScalarAsync();
             var result = targetKey == null || targetKey == DBNull.Value ? DBNull.Value : targetKey;
@@ -174,17 +182,14 @@ public class SyncService : ISyncService
 
     public void StartAutoSync()
     {
-        if (UsesDirectRemoteDatabase)
-        {
-            OnSyncProgress?.Invoke("Direct remote database active");
-            return;
-        }
-
         _ = Task.Run(async () =>
         {
-            // Initial sync on startup as soon as network is ready
-            await Task.Delay(TimeSpan.FromSeconds(2));
-            if (_connectivityService.IsOnline && !_isSyncing)
+            // Initial sync on startup as soon as both endpoints are ready.
+            // App runs fully on Online/Remote; auto-sync keeps Network/LAN matching.
+            // Delayed 30s so login + shell init don't compete with a 9-table sync
+            // for connections to the hosted DB (startup connection storm fix).
+            await Task.Delay(TimeSpan.FromSeconds(30));
+            if (_connectivityService.IsOnline && _connectivityService.IsNetworkOnline && !_isSyncing)
             {
                 await SyncNowAsync();
             }
@@ -193,14 +198,14 @@ public class SyncService : ISyncService
             {
                 await Task.Delay(TimeSpan.FromMinutes(5));
 
-                if (_connectivityService.IsOnline && !_isSyncing)
+                if (_connectivityService.IsOnline && _connectivityService.IsNetworkOnline && !_isSyncing)
                     await SyncNowAsync();
             }
         });
 
         _connectivityService.OnConnectionStatusChanged += (isOnline) =>
         {
-            if (isOnline && !_isSyncing)
+            if (isOnline && _connectivityService.IsNetworkOnline && !_isSyncing)
             {
                 _ = Task.Run(SyncNowAsync);
             }
@@ -209,34 +214,47 @@ public class SyncService : ISyncService
 
     public async Task SyncNowAsync()
     {
-        if (UsesDirectRemoteDatabase)
-        {
-            OnSyncProgress?.Invoke("Direct remote database active");
-            return;
-        }
-
         if (!await _syncGate.WaitAsync(0)) return;
 
         _isSyncing = true;
         OnSyncStatusChanged?.Invoke(true);
-        OnSyncProgress?.Invoke("Syncing with cloud...");
+        OnSyncProgress?.Invoke("Syncing Online with Network...");
 
         var syncErrors = new List<string>();
         try
         {
             using var scope = _scopeFactory.CreateScope();
-            var localDb = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-            var cloudDb = scope.ServiceProvider.GetRequiredService<CloudDbContext>();
+            // Online = Remote primary (fully used). Network = office LAN server.
+            var onlineDb = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var networkDb = scope.ServiceProvider.GetRequiredService<CloudDbContext>();
 
-            bool canReach = await cloudDb.Database.CanConnectAsync();
-            if (!canReach)
+            bool canReachOnline = await onlineDb.Database.CanConnectAsync();
+            bool canReachNetwork = await networkDb.Database.CanConnectAsync();
+            if (!canReachOnline && !canReachNetwork)
             {
-                OnSyncProgress?.Invoke("Cloud unreachable. Sync skipped.");
+                OnSyncProgress?.Invoke("Online and Network unreachable. Sync skipped.");
+                return;
+            }
+            if (!canReachOnline)
+            {
+                OnSyncProgress?.Invoke("Online database unreachable. Sync skipped.");
+                return;
+            }
+            if (!canReachNetwork)
+            {
+                OnSyncProgress?.Invoke("Network server unreachable. Sync skipped.");
                 return;
             }
 
-            OnSyncProgress?.Invoke("Preparing cloud schema...");
-            await MigrateCloudTablesAsync(cloudDb);
+            var localDb = onlineDb;
+            var cloudDb = networkDb;
+
+            if (System.Threading.Interlocked.Exchange(ref _schemaEnsured, 1) == 0)
+            {
+                OnSyncProgress?.Invoke("Preparing Online and Network schema...");
+                await MigrateCloudTablesAsync(onlineDb);
+                await MigrateCloudTablesAsync(cloudDb);
+            }
 
             var localConn = localDb.Database.GetDbConnection();
             if (localConn.State != System.Data.ConnectionState.Open) await localConn.OpenAsync();
@@ -244,14 +262,16 @@ public class SyncService : ISyncService
             var cloudConn = cloudDb.Database.GetDbConnection();
             if (cloudConn.State != System.Data.ConnectionState.Open) await cloudConn.OpenAsync();
 
-            // Repair legacy orphaned references before enforcing relationships.
-            await RepairOrphanedForeignKeysAsync(localConn, isMySql: false, syncErrors);
-            await RepairOrphanedForeignKeysAsync(cloudConn, isMySql: true, syncErrors);
-
-            using (var cmd = localConn.CreateCommand())
+            if (System.Threading.Interlocked.CompareExchange(ref _schemaEnsured, 1, 1) == 1)
             {
-                cmd.CommandText = "PRAGMA foreign_keys = ON;";
-                await cmd.ExecuteNonQueryAsync();
+                // Repair legacy orphaned references before enforcing relationships.
+                // Both sides are MySQL (Online/Remote + Network/LAN). Runs with the
+                // first sync only per process; later syncs skip the 12 full scans.
+                if (System.Threading.Interlocked.Exchange(ref _repairDone, 1) == 0)
+                {
+                    await RepairOrphanedForeignKeysAsync(localConn, isMySql: true, syncErrors);
+                    await RepairOrphanedForeignKeysAsync(cloudConn, isMySql: true, syncErrors);
+                }
             }
 
             var foreignKeyTranslator = new ForeignKeyTranslator(localConn, cloudConn);
@@ -314,7 +334,7 @@ public class SyncService : ISyncService
         }
     }
 
-    private async Task MigrateCloudTablesAsync(CloudDbContext cloudDb)
+    private async Task MigrateCloudTablesAsync(DbContext db)
     {
         var migrations = new[]
         {
@@ -350,7 +370,7 @@ public class SyncService : ISyncService
             ("consolidated_transactions", "household_no", "VARCHAR(45) NULL"),
         };
 
-        var conn = cloudDb.Database.GetDbConnection();
+        var conn = db.Database.GetDbConnection();
         if (conn.State != System.Data.ConnectionState.Open)
             await conn.OpenAsync();
 
@@ -403,16 +423,16 @@ public class SyncService : ISyncService
 
         if (syncIdProp == null || updatedProp == null) return;
 
-        // ── Ensure Local SyncIds are not NULL (SQLite backfill) ──────────────
+        // ── Ensure Online SyncIds are not NULL (MySQL backfill) ─────────────
+        // Both sides are MySQL now (Online/Remote + Network/LAN).
         try
         {
             var meta  = localDb.Model.FindEntityType(typeof(T))!;
             var tblName = meta.GetTableName()!;
-            const string uuidExpr = "lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4' || substr(lower(hex(randomblob(2))),2) || '-' || substr('89ab', abs(random()) % 4 + 1, 1) || substr(lower(hex(randomblob(2))),2) || '-' || lower(hex(randomblob(6)))";
             var conn = localDb.Database.GetDbConnection();
             if (conn.State != System.Data.ConnectionState.Open) await conn.OpenAsync();
             using var cmd = conn.CreateCommand();
-            cmd.CommandText = $"UPDATE \"{tblName}\" SET \"SyncId\" = ({uuidExpr}) WHERE \"SyncId\" IS NULL OR \"SyncId\" = '';";
+            cmd.CommandText = $"UPDATE `{tblName}` SET `SyncId` = UUID() WHERE `SyncId` IS NULL OR `SyncId` = '';";
             await cmd.ExecuteNonQueryAsync();
         }
         catch { }
@@ -452,7 +472,7 @@ public class SyncService : ISyncService
         if (localConn.State != System.Data.ConnectionState.Open)
             await localConn.OpenAsync();
 
-        // ── Push local → cloud ────────────────────────────────────────────────
+        // ── Push Online → Network ───────────────────────────────────────────
         foreach (var local in localRecords)
         {
             var syncId  = (Guid)syncIdProp.GetValue(local)!;
@@ -464,14 +484,14 @@ public class SyncService : ISyncService
             {
                 try
                 {
-                    var overrides = await foreignKeyTranslator.GetOverridesAsync(local, sourceIsMySql: false, syncErrors);
+                    var overrides = await foreignKeyTranslator.GetOverridesAsync(local, sourceIsMySql: true, syncErrors);
                     await RawSqlInsertAsync(cloudConn, cloudTableName, cloudScalars, local,
                         isMySql: true, skipCols: cloudPkNames, overrides);
                 }
                 catch (Exception ex)
                 {
-                    AddSyncError(syncErrors, $"Cloud insert failed ({typeof(T).Name}): {ex.Message}");
-                    System.Diagnostics.Debug.WriteLine($"[SyncService] Cloud insert failed ({typeof(T).Name}): {ex.Message}");
+                    AddSyncError(syncErrors, $"Network insert failed ({typeof(T).Name}): {ex.Message}");
+                    System.Diagnostics.Debug.WriteLine($"[SyncService] Network insert failed ({typeof(T).Name}): {ex.Message}");
                 }
             }
             else
@@ -483,19 +503,19 @@ public class SyncService : ISyncService
                 {
                     try
                     {
-                        var overrides = await foreignKeyTranslator.GetOverridesAsync(local, sourceIsMySql: false, syncErrors);
+                        var overrides = await foreignKeyTranslator.GetOverridesAsync(local, sourceIsMySql: true, syncErrors);
                         await RawSqlUpdateAsync(cloudConn, cloudTableName, cloudScalars, cloudPkNames,
                             incoming: local, existing: cloudMatch, isMySql: true, overrides);
                     }
                     catch (Exception ex)
                     {
-                        AddSyncError(syncErrors, $"Cloud update failed ({typeof(T).Name}): {ex.Message}");
+                        AddSyncError(syncErrors, $"Network update failed ({typeof(T).Name}): {ex.Message}");
                     }
                 }
             }
         }
 
-        // ── Pull cloud → local ────────────────────────────────────────────────
+        // ── Pull Network → Online ───────────────────────────────────────────
         // Reload cloud in case push inserted new rows
         cloudRecords = await cloudSet.AsNoTracking().ToListAsync();
         // Assign a fresh SyncId to any cloud rows that still have Guid.Empty
@@ -524,12 +544,12 @@ public class SyncService : ISyncService
                 {
                     var overrides = await foreignKeyTranslator.GetOverridesAsync(cloud, sourceIsMySql: true, syncErrors);
                     await RawSqlInsertAsync(localConn, localTableName, localScalars, cloud,
-                        isMySql: false, skipCols: localPkNames, overrides);
+                        isMySql: true, skipCols: localPkNames, overrides);
                 }
                 catch (Exception ex)
                 {
-                    AddSyncError(syncErrors, $"Local insert failed ({typeof(T).Name}): {ex.Message}");
-                    System.Diagnostics.Debug.WriteLine($"[SyncService] Local insert failed ({typeof(T).Name}): {ex.Message}");
+                    AddSyncError(syncErrors, $"Online insert failed ({typeof(T).Name}): {ex.Message}");
+                    System.Diagnostics.Debug.WriteLine($"[SyncService] Online insert failed ({typeof(T).Name}): {ex.Message}");
                 }
             }
             else
@@ -543,11 +563,11 @@ public class SyncService : ISyncService
                     try
                     {
                         await RawSqlUpdateAsync(localConn, localTableName, localScalars, localPkNames,
-                            incoming: cloud, existing: localMatch, isMySql: false, overrides);
+                            incoming: cloud, existing: localMatch, isMySql: true, overrides);
                     }
                     catch (Exception ex)
                     {
-                        AddSyncError(syncErrors, $"Local update failed ({typeof(T).Name}): {ex.Message}");
+                        AddSyncError(syncErrors, $"Online update failed ({typeof(T).Name}): {ex.Message}");
                     }
                 }
                 else if (overrides.Count > 0)
@@ -555,11 +575,11 @@ public class SyncService : ISyncService
                     try
                     {
                         await RawSqlUpdateOverridesAsync(localConn, localTableName, localScalars,
-                            localPkNames, localMatch, isMySql: false, overrides);
+                            localPkNames, localMatch, isMySql: true, overrides);
                     }
                     catch (Exception ex)
                     {
-                        AddSyncError(syncErrors, $"Local relationship repair failed ({typeof(T).Name}): {ex.Message}");
+                        AddSyncError(syncErrors, $"Online relationship repair failed ({typeof(T).Name}): {ex.Message}");
                     }
                 }
             }
