@@ -131,7 +131,7 @@ public class BudgetTransactionsViewModel : ViewModelBase
             if (row is TransactionRow t)
             {
                 var window = new VoucherPrintWindow(t);
-                window.ShowDialog();
+                GoodGovernanceApp.Utilities.ModalHelper.Show(window);
             }
         });
 
