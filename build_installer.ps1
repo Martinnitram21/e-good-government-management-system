@@ -38,7 +38,7 @@ if (-not $iscc) {
 & "$iscc" "$root\installer.iss"
 if ($LASTEXITCODE -ne 0) { throw "ISCC failed" }
 $downloads = Join-Path $env:USERPROFILE "Downloads"
-$built = Join-Path $root "InstallerOutput\GoodGovernanceSetup-1.0.2.exe"
-$installer = Join-Path $downloads "GoodGovernanceSetup-1.0.2.exe"
+$built = Join-Path $root "InstallerOutput\GoodGovernanceSetup-1.0.6.exe"
+$installer = Join-Path $downloads "GoodGovernanceSetup-1.0.6.exe"
 Copy-Item $built $installer -Force
 Write-Host "Done. Installer in $installer" -ForegroundColor Green
