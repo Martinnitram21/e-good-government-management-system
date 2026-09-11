@@ -228,14 +228,47 @@ public class MainViewModel : ViewModelBase, IDisposable
         }
     }
 
-    // The operational AppDbContext is intentionally wired to RemoteConnection.
-    // SQLite remains a legacy diagnostic/cache file and is not the active DB.
-    public string ActiveDatabaseMode => "REMOTE MYSQL";
+    // ── Single active-database status ─────────────────────────────────────
+    // The footer shows ONLY the database the system is currently using.
+    // Mode comes from AppSettings:DatabaseMode (Remote = Online, Network = LAN).
+    private string _activeDatabaseMode = "ONLINE";
+    public string ActiveDatabaseMode
+    {
+        get => _activeDatabaseMode;
+        private set { _activeDatabaseMode = value; OnPropertyChanged(); }
+    }
+
+    public bool ActiveConnectionIsOnline => IsActiveModeNetwork ? IsNetworkOnline : IsOnline;
+
+    public bool IsActiveModeNetwork
+    {
+        get
+        {
+            string mode = App.Config?["AppSettings:DatabaseMode"] ?? ActiveDatabaseMode ?? "Remote";
+            return mode.Equals("Network", System.StringComparison.OrdinalIgnoreCase)
+                || mode.Equals("LAN", System.StringComparison.OrdinalIgnoreCase)
+                || mode.Equals("LanConnection", System.StringComparison.OrdinalIgnoreCase);
+        }
+    }
+
+    private static string ResolveActiveModeLabel()
+    {
+        string mode = App.Config?["AppSettings:DatabaseMode"] ?? "Remote";
+        if (mode.Equals("Network", System.StringComparison.OrdinalIgnoreCase)
+            || mode.Equals("LAN", System.StringComparison.OrdinalIgnoreCase)
+            || mode.Equals("LanConnection", System.StringComparison.OrdinalIgnoreCase))
+            return "NETWORK (LAN)";
+        // Remote connection is the Online (cloud) database.
+        return "ONLINE";
+    }
+
+    // Kept for backward-compat (background checks still run for sync/reports),
+    // but the footer no longer displays these individually.
     public string SqliteStatusText => "DISABLED";
     public string RemoteStatusText => GetConnectionStatusText(IsOnline);
     public string NetworkStatusText => GetConnectionStatusText(IsNetworkOnline);
     public string CrsStatusText => GetConnectionStatusText(IsCrsOnline);
-    public string ActiveDatabaseStatusText => GetConnectionStatusText(IsOnline);
+    public string ActiveDatabaseStatusText => GetConnectionStatusText(ActiveConnectionIsOnline);
 
     private string GetConnectionStatusText(bool isConnected) =>
         !ConnectionCheckCompleted ? "CHECKING" : isConnected ? "ONLINE" : "OFFLINE";
