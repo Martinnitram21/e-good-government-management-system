@@ -42,7 +42,7 @@ public class AppNotification
     public string FormattedDate => Date.ToString("MMM dd, hh:mm tt");
 }
 
-public class MainViewModel : ViewModelBase
+public class MainViewModel : ViewModelBase, IDisposable
 {
     // ── services ─────────────────────────────────────────────────────────────
     private readonly Services.SessionService _sessionService;
@@ -172,8 +172,70 @@ public class MainViewModel : ViewModelBase
     public bool IsOnline
     {
         get => _isOnline;
-        set { _isOnline = value; OnPropertyChanged(); }
+        set
+        {
+            if (_isOnline == value) return;
+            _isOnline = value;
+            IsDatabaseConnected = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(RemoteStatusText));
+            OnPropertyChanged(nameof(ActiveDatabaseStatusText));
+        }
     }
+
+    private bool _isNetworkOnline;
+    public bool IsNetworkOnline
+    {
+        get => _isNetworkOnline;
+        private set
+        {
+            if (_isNetworkOnline == value) return;
+            _isNetworkOnline = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(NetworkStatusText));
+        }
+    }
+
+    private bool _isCrsOnline;
+    public bool IsCrsOnline
+    {
+        get => _isCrsOnline;
+        private set
+        {
+            if (_isCrsOnline == value) return;
+            _isCrsOnline = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(CrsStatusText));
+        }
+    }
+
+    private bool _connectionCheckCompleted;
+    public bool ConnectionCheckCompleted
+    {
+        get => _connectionCheckCompleted;
+        private set
+        {
+            if (_connectionCheckCompleted == value) return;
+            _connectionCheckCompleted = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(RemoteStatusText));
+            OnPropertyChanged(nameof(NetworkStatusText));
+            OnPropertyChanged(nameof(CrsStatusText));
+            OnPropertyChanged(nameof(ActiveDatabaseStatusText));
+        }
+    }
+
+    // The operational AppDbContext is intentionally wired to RemoteConnection.
+    // SQLite remains a legacy diagnostic/cache file and is not the active DB.
+    public string ActiveDatabaseMode => "REMOTE MYSQL";
+    public string SqliteStatusText => "DISABLED";
+    public string RemoteStatusText => GetConnectionStatusText(IsOnline);
+    public string NetworkStatusText => GetConnectionStatusText(IsNetworkOnline);
+    public string CrsStatusText => GetConnectionStatusText(IsCrsOnline);
+    public string ActiveDatabaseStatusText => GetConnectionStatusText(IsOnline);
+
+    private string GetConnectionStatusText(bool isConnected) =>
+        !ConnectionCheckCompleted ? "CHECKING" : isConnected ? "ONLINE" : "OFFLINE";
 
     private bool _isSyncing = false;
     public bool IsSyncing
@@ -221,6 +283,11 @@ public class MainViewModel : ViewModelBase
     private readonly IServiceProvider _serviceProvider;
     private readonly GoodGovernanceApp.Services.IConnectivityService _connectivityService;
     private readonly GoodGovernanceApp.Services.ISyncService _syncService;
+    private readonly Action<bool> _connectionStatusHandler;
+    private readonly Action<bool> _syncStatusHandler;
+    private readonly Action<string> _syncProgressHandler;
+    private readonly Action<List<string>> _syncErrorsHandler;
+    private bool _disposed;
 
     // ── constructor ───────────────────────────────────────────────────────────
     public MainViewModel(Services.SessionService sessionService, DatabaseHelper dbHelper, IServiceProvider serviceProvider, GoodGovernanceApp.Services.IConnectivityService connectivityService, GoodGovernanceApp.Services.ISyncService syncService)
@@ -235,35 +302,39 @@ public class MainViewModel : ViewModelBase
         CurrentDate = DateTime.Now.ToString("dddd, MMMM dd, yyyy  •  hh:mm tt");
         _clockTimer = new Timer(_ =>
         {
-            Application.Current?.Dispatcher.Invoke(() =>
+            DispatchToUi(() =>
                 CurrentDate = DateTime.Now.ToString("dddd, MMMM dd, yyyy  •  hh:mm tt"));
         }, null, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(30));
 
         // Sync Events
-        _connectivityService.OnConnectionStatusChanged += (isOnline) =>
+        _connectionStatusHandler = isOnline =>
         {
-            Application.Current?.Dispatcher.Invoke(() => IsOnline = isOnline);
+            DispatchToUi(() => RefreshConnectionStatus(isOnline));
         };
-        _syncService.OnSyncStatusChanged += (isSyncing) =>
+        _syncStatusHandler = isSyncing =>
         {
-            Application.Current?.Dispatcher.Invoke(() => IsSyncing = isSyncing);
+            DispatchToUi(() => IsSyncing = isSyncing);
         };
-        _syncService.OnSyncProgress += (msg) =>
+        _syncProgressHandler = msg =>
         {
-            Application.Current?.Dispatcher.Invoke(() => SyncStatus = msg);
+            DispatchToUi(() => SyncStatus = msg);
         };
-        _syncService.OnSyncErrorsCollected += (errors) =>
+        _syncErrorsHandler = errors =>
         {
-            Application.Current?.Dispatcher.Invoke(() =>
+            DispatchToUi(() =>
             {
                 SyncErrorCount = errors.Count;
                 LastSyncErrors = errors;
             });
         };
+        _connectivityService.OnConnectionStatusChanged += _connectionStatusHandler;
+        _syncService.OnSyncStatusChanged += _syncStatusHandler;
+        _syncService.OnSyncProgress += _syncProgressHandler;
+        _syncService.OnSyncErrorsCollected += _syncErrorsHandler;
 
         // Seed the initial state from whatever ConnectivityService already knows
-        IsOnline   = _connectivityService.IsOnline;
-        SyncStatus = "Checking...";
+        RefreshConnectionStatus(_connectivityService.IsOnline);
+        SyncStatus = "Direct database active";
 
         // Ask ConnectivityService to push its current status to all subscribers immediately
         _connectivityService.SyncCurrentStatus();
@@ -292,12 +363,7 @@ public class MainViewModel : ViewModelBase
         NotificationClickedCommand  = new RelayCommand(ExecuteNotificationClicked);
         OpenNotificationsCommand    = new RelayCommand(_ => IsNotificationPopupOpen = true);
 
-        LoadApplicationProfileAsync();
-        LoadProfilePhotoAsync();
-        LoadSystemPhotoAsync();
-        LoadGovProfileAsync();
-        LoadCopyrightPhotoAsync();
-        LoadNotificationsAsync();
+        _ = InitializeShellAsync();
 
         // ── Build navigation items with Metro tile colors ──────────────────
         var allItems = new List<NavigationItem>
@@ -341,6 +407,43 @@ public class MainViewModel : ViewModelBase
         // Start on the dashboard tile grid
         IsShowingDashboard  = true;
         CurrentSectionTitle = "Home";
+    }
+
+    private async Task InitializeShellAsync()
+    {
+        try
+        {
+            // Local image work may run together, but database reads are kept
+            // sequential to avoid a connection burst immediately after login.
+            await Task.WhenAll(LoadSystemPhotoAsync(), LoadCopyrightPhotoAsync());
+            await LoadGovProfileAsync();
+            await LoadProfilePhotoAsync();
+            await LoadNotificationsAsync();
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[MainViewModel] Shell initialization skipped: {ex}");
+        }
+    }
+
+    private static void DispatchToUi(Action action)
+    {
+        var dispatcher = Application.Current?.Dispatcher;
+        if (dispatcher == null || dispatcher.HasShutdownStarted)
+            return;
+
+        if (dispatcher.CheckAccess())
+            action();
+        else
+            _ = dispatcher.BeginInvoke(action);
+    }
+
+    private void RefreshConnectionStatus(bool remoteOnline)
+    {
+        IsOnline = remoteOnline;
+        IsNetworkOnline = _connectivityService.IsNetworkOnline;
+        IsCrsOnline = _connectivityService.IsCrsOnline;
+        ConnectionCheckCompleted = _connectivityService.HasChecked;
     }
 
     // ── tile navigation ───────────────────────────────────────────────────────
@@ -538,7 +641,7 @@ public class MainViewModel : ViewModelBase
 
                 if (img != null)
                 {
-                    Application.Current.Dispatcher.Invoke(() => SystemPhotoSource = img);
+                    DispatchToUi(() => SystemPhotoSource = img);
                 }
             });
         }
@@ -557,7 +660,7 @@ public class MainViewModel : ViewModelBase
 
                 if (img != null)
                 {
-                    Application.Current.Dispatcher.Invoke(() => CopyrightPhotoSource = img);
+                    DispatchToUi(() => CopyrightPhotoSource = img);
                 }
             });
         }
@@ -578,6 +681,8 @@ public class MainViewModel : ViewModelBase
                 string govName = row["GoveName"]?.ToString() ?? "";
                 string addr = row["Address"]?.ToString() ?? "";
                 logoAddressFromDb = row["LogoAddress"]?.ToString() ?? "";
+                if (!string.IsNullOrWhiteSpace(govName))
+                    GovernanceName = govName;
             }
 
             await Task.Run(() =>
@@ -594,7 +699,7 @@ public class MainViewModel : ViewModelBase
 
                 if (img != null)
                 {
-                    Application.Current.Dispatcher.Invoke(() => GovPhotoSource = img);
+                    DispatchToUi(() => GovPhotoSource = img);
                 }
             });
         }
@@ -650,7 +755,7 @@ public class MainViewModel : ViewModelBase
 
             var sortedNotifications = notifications.OrderByDescending(n => n.Date).Take(10).ToList();
 
-            Application.Current.Dispatcher.Invoke(() =>
+            DispatchToUi(() =>
             {
                 Notifications.Clear();
                 foreach (var n in sortedNotifications)
@@ -675,7 +780,7 @@ public class MainViewModel : ViewModelBase
     // ── logout ────────────────────────────────────────────────────────────────
     private void ExecuteLogout(object? parameter)
     {
-        _clockTimer.Dispose();
+        Dispose();
         _sessionService.ClearSession();
 
         var loginWindow = _serviceProvider.GetService(typeof(Views.LoginWindow)) as Views.LoginWindow;
@@ -684,6 +789,20 @@ public class MainViewModel : ViewModelBase
         var window = parameter as System.Windows.Window
                      ?? Application.Current.Windows.OfType<Views.MainWindow>().FirstOrDefault();
         window?.Close();
+    }
+
+    public void Dispose()
+    {
+        if (_disposed)
+            return;
+
+        _disposed = true;
+        _clockTimer.Dispose();
+        _connectivityService.OnConnectionStatusChanged -= _connectionStatusHandler;
+        _syncService.OnSyncStatusChanged -= _syncStatusHandler;
+        _syncService.OnSyncProgress -= _syncProgressHandler;
+        _syncService.OnSyncErrorsCollected -= _syncErrorsHandler;
+        GC.SuppressFinalize(this);
     }
 
     // ── app profile window ────────────────────────────────────────────────────
