@@ -2,9 +2,12 @@ using GoodGovernanceApp.Data;
 using GoodGovernanceApp.Models;
 using GoodGovernanceApp.Utilities;
 using GoodGovernanceApp.Views;
+using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using MySqlConnector;
 using System;
+using System.IO;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Input;
@@ -143,24 +146,26 @@ public class LoginViewModel : ViewModelBase
 
         try
         {
-            User? user = null;
-
-            using var scope = _serviceProvider.CreateScope();
-            var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-
             string inputLower = Username.Trim().ToLowerInvariant();
+            User? user;
 
-            // First try: match by `name`
-            user = await context.Users
-                .AsNoTracking()
-                .FirstOrDefaultAsync(u => u.Name.ToLower() == inputLower);
-
-            // Second try: match by `email`
-            if (user == null)
+            try
             {
-                user = await context.Users
-                    .AsNoTracking()
-                    .FirstOrDefaultAsync(u => u.Email.ToLower() == inputLower);
+                using var scope = _serviceProvider.CreateScope();
+                var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+                user = await FindUserAsync(context, inputLower);
+            }
+            catch (Exception ex) when (IsDatabaseConnectionFailure(ex))
+            {
+                // Use the local account cache only when MySQL cannot be reached.
+                // The password and account status are still verified below.
+                user = await FindCachedUserAsync(inputLower);
+
+                if (user == null)
+                {
+                    ErrorMessage = "The database server is currently unavailable and this account is not available offline. Check Database Connection Settings and try again.";
+                    return;
+                }
             }
 
             if (user == null)
@@ -225,6 +230,79 @@ public class LoginViewModel : ViewModelBase
     }
 
     // ── Application Profile ───────────────────────────────────────────────────
+    private static async Task<User?> FindUserAsync(AppDbContext context, string normalizedLogin)
+    {
+        User? user = await context.Users
+            .AsNoTracking()
+            .FirstOrDefaultAsync(u => u.Name.ToLower() == normalizedLogin);
+
+        if (user == null)
+        {
+            user = await context.Users
+                .AsNoTracking()
+                .FirstOrDefaultAsync(u => u.Email.ToLower() == normalizedLogin);
+        }
+
+        return user;
+    }
+
+    private static async Task<User?> FindCachedUserAsync(string normalizedLogin)
+    {
+        string databasePath = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+            "GoodGovernanceApp",
+            "ggms.db");
+
+        if (!File.Exists(databasePath))
+            return null;
+
+        var connectionBuilder = new SqliteConnectionStringBuilder
+        {
+            DataSource = databasePath,
+            Mode = SqliteOpenMode.ReadOnly
+        };
+
+        await using var connection = new SqliteConnection(connectionBuilder.ConnectionString);
+        await connection.OpenAsync();
+
+        await using var command = connection.CreateCommand();
+        command.CommandText = @"
+            SELECT id, name, email, password, role, status
+            FROM users
+            WHERE lower(name) = $login OR lower(email) = $login
+            LIMIT 1;";
+        command.Parameters.AddWithValue("$login", normalizedLogin);
+
+        await using var reader = await command.ExecuteReaderAsync();
+        if (!await reader.ReadAsync())
+            return null;
+
+        return new User
+        {
+            Id = reader.GetInt64(0),
+            Name = reader.GetString(1),
+            Email = reader.GetString(2),
+            Password = reader.GetString(3),
+            Role = reader.IsDBNull(4) ? "user" : reader.GetString(4),
+            Status = reader.IsDBNull(5) ? "active" : reader.GetString(5)
+        };
+    }
+
+    private static bool IsDatabaseConnectionFailure(Exception exception)
+    {
+        for (Exception? current = exception; current != null; current = current.InnerException)
+        {
+            if (current is MySqlException)
+                return true;
+
+            if (current.Message.Contains("Unable to connect to any of the specified MySQL hosts", StringComparison.OrdinalIgnoreCase)
+                || current.Message.Contains("maximum number of retries", StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+
+        return false;
+    }
+
     private static string RememberedUserFile => System.IO.Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "GoodGovernanceApp",
