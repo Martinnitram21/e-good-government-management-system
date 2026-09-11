@@ -180,6 +180,7 @@ public class MainViewModel : ViewModelBase, IDisposable
             OnPropertyChanged();
             OnPropertyChanged(nameof(RemoteStatusText));
             OnPropertyChanged(nameof(ActiveDatabaseStatusText));
+            OnPropertyChanged(nameof(ActiveConnectionIsOnline));
         }
     }
 
@@ -193,6 +194,8 @@ public class MainViewModel : ViewModelBase, IDisposable
             _isNetworkOnline = value;
             OnPropertyChanged();
             OnPropertyChanged(nameof(NetworkStatusText));
+            OnPropertyChanged(nameof(ActiveDatabaseStatusText));
+            OnPropertyChanged(nameof(ActiveConnectionIsOnline));
         }
     }
 
