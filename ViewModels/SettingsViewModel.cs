@@ -65,8 +65,8 @@ namespace GoodGovernanceApp.ViewModels
             // ── Other commands ───────────────────────────────────────────────
             BrowseBackupFolderCommand = new RelayCommand(_ => BrowseBackupFolder());
             BrowseMySqlDumpCommand = new RelayCommand(_ => BrowseMySqlDump());
-            OpenSystemsProfileCommand = new RelayCommand(_ => new SystemsApplicationProfile().ShowDialog());
-            OpenCopyrightProfileCommand = new RelayCommand(_ => new CopyrightProfileWindow { DataContext = App.AppHost?.Services.GetRequiredService<CopyrightProfileViewModel>() }.ShowDialog());
+            OpenSystemsProfileCommand = new RelayCommand(_ => ModalHelper.Show(new SystemsApplicationProfile()));
+            OpenCopyrightProfileCommand = new RelayCommand(_ => ModalHelper.Show(new CopyrightProfileWindow { DataContext = App.AppHost?.Services.GetRequiredService<CopyrightProfileViewModel>() }));
             OpenDepartmentsCommand = new RelayCommand(_ =>
             {
                 var window = new Window
@@ -77,7 +77,7 @@ namespace GoodGovernanceApp.ViewModels
                     Height = 650,
                     WindowStartupLocation = WindowStartupLocation.CenterScreen
                 };
-                window.ShowDialog();
+                ModalHelper.Show(window);
             });
         }
 
@@ -159,7 +159,7 @@ namespace GoodGovernanceApp.ViewModels
             }
 
             var otpWindow = new OtpVerificationWindow(email);
-            otpWindow.ShowDialog();
+            ModalHelper.Show(otpWindow);
 
             if (otpWindow.IsVerified)
             {
@@ -488,9 +488,9 @@ namespace GoodGovernanceApp.ViewModels
 
             await Task.WhenAll(ggmsTask, networkTask, crsTask);
 
-            var (ggmsOk, ggmsMsg) = ggmsTask.Result;
-            var (networkOk, networkMsg) = networkTask.Result;
-            var (crsOk, crsMsg) = crsTask.Result;
+            var (ggmsOk, ggmsMsg) = await ggmsTask;
+            var (networkOk, networkMsg) = await networkTask;
+            var (crsOk, crsMsg) = await crsTask;
 
             GgmsTestResult = ggmsOk ? "✅ Remote: Connected" : $"⚠ Remote: Offline / Unreachable ({ggmsMsg})";
             NetworkTestResult = networkOk ? "✅ Network (LAN): Connected" : $"⚠ Network (LAN): Offline / Unreachable ({networkMsg})";
@@ -513,13 +513,13 @@ namespace GoodGovernanceApp.ViewModels
 
             await Task.WhenAll(ggmsTask, networkTask, crsTask);
 
-            var (ggmsOk, ggmsMsg) = ggmsTask.Result;
-            var (networkOk, networkMsg) = networkTask.Result;
-            var (crsOk, crsMsg) = crsTask.Result;
+            var (ggmsOk2, ggmsMsg2) = await ggmsTask;
+            var (networkOk2, networkMsg2) = await networkTask;
+            var (crsOk2, crsMsg2) = await crsTask;
 
-            GgmsTestResult = ggmsOk ? "✅ Remote: Connected" : $"⚠ Remote: Offline / Unreachable ({ggmsMsg})";
-            NetworkTestResult = networkOk ? "✅ Network (LAN): Connected" : $"⚠ Network (LAN): Offline / Unreachable ({networkMsg})";
-            CrsTestResult = crsOk ? "✅ CRS Database: Connected" : $"⚠ CRS Database: Offline / Unreachable ({crsMsg})";
+            GgmsTestResult = ggmsOk2 ? "✅ Remote: Connected" : $"⚠ Remote: Offline / Unreachable ({ggmsMsg2})";
+            NetworkTestResult = networkOk2 ? "✅ Network (LAN): Connected" : $"⚠ Network (LAN): Offline / Unreachable ({networkMsg2})";
+            CrsTestResult = crsOk2 ? "✅ CRS Database: Connected" : $"⚠ CRS Database: Offline / Unreachable ({crsMsg2})";
             IsTesting = false;
         }
 
