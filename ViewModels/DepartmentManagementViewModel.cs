@@ -286,7 +286,7 @@ public class DepartmentManagementViewModel : ViewModelBase
                         .FirstOrDefault()
         };
 
-        bool? result = window.ShowDialog();
+        bool? result = GoodGovernanceApp.Utilities.ModalHelper.Show(window);
 
         if (result == true)
         {
