@@ -99,7 +99,7 @@ public partial class App : Application
     ""AppPassword"": ""afyyknunzimihtrv""
   },
   ""AppSettings"": {
-    ""DatabaseMode"": ""Remote"",
+    ""DatabaseMode"": ""Online"",
     ""UseRemoteDatabase"": true,
     ""MySqlDumpPath"": ""mysqldump""
   }
@@ -271,7 +271,7 @@ public partial class App : Application
                     string detail = ex.InnerException?.Message ?? ex.Message;
                     await Dispatcher.InvokeAsync(() => MessageBox.Show(
                         $"Active database connection failed (REMOTE).\n\n{detail}\n\n" +
-                        "Please check your internet connection and the Remote database settings, then restart the application.",
+                        "Please check your internet connection and the Online database settings, then restart the application.",
                         "Database Unavailable",
                         MessageBoxButton.OK,
                         MessageBoxImage.Error));
