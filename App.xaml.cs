@@ -100,7 +100,7 @@ public partial class App : Application
   },
   ""AppSettings"": {
     ""DatabaseMode"": ""Remote"",
-    ""UseRemoteDatabase"": false,
+    ""UseRemoteDatabase"": true,
     ""MySqlDumpPath"": ""mysqldump""
   }
 }";
@@ -117,9 +117,11 @@ public partial class App : Application
                 })
             .ConfigureServices((context, services) =>
             {
-                services.AddDbContext<AppDbContext>(options =>
+                services.AddDbContext<AppDbContext>((serviceProvider, options) =>
                 {
-                    options.UseSqlite($"Data Source={Path.Combine(appDataFolder, "ggms.db")}");
+                    var dbConfig = serviceProvider.GetRequiredService<IDatabaseConfig>();
+                    var connectionString = dbConfig.ConnectionString;
+                    options.UseMySql(connectionString, ServerVersion.AutoDetect(connectionString));
                 }, ServiceLifetime.Transient, ServiceLifetime.Transient);
 
                 services.AddDbContext<CloudDbContext>((serviceProvider, options) =>
@@ -215,7 +217,38 @@ public partial class App : Application
 
         base.OnStartup(e);
 
+        // The operational database is the configured remote MySQL server. Verify
+        // both connectivity and the users table before the login window appears.
+        using (var scope = AppHost.Services.CreateScope())
+        {
+            try
+            {
+                var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+                using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+                if (!await dbContext.Database.CanConnectAsync(timeout.Token))
+                    throw new InvalidOperationException("The configured remote database could not be reached.");
+
+                await EnsureRemoteSupportTablesAsync(dbContext, timeout.Token);
+
+                await dbContext.Users.AsNoTracking()
+                    .Select(user => user.Id)
+                    .Take(1)
+                    .ToListAsync(timeout.Token);
+            }
+            catch (Exception ex)
+            {
+                string detail = ex.InnerException?.Message ?? ex.Message;
+                MessageBox.Show(
+                    $"Remote database connection failed.\n\n{detail}\n\n" +
+                    "This application uses direct remote access and will not fall back to the offline SQLite database.",
+                    "Remote Database Unavailable",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error);
+            }
+        }
+
         // ── Initialise SQLite database BEFORE showing the login window ──────────
+        if (ShouldInitializeLegacySqliteDatabase())
         await Task.Run(async () =>
         {
             using var scope = AppHost.Services.CreateScope();
@@ -403,24 +436,10 @@ public partial class App : Application
                             UPDATE ""master_budget"" SET ""allocated_budget"" = '0.00' WHERE ""allocated_budget"" IS NULL;
                             UPDATE ""master_budget"" SET ""remaining_budget"" = ""total_budget"" WHERE ""remaining_budget"" IS NULL;
                             UPDATE ""master_budget"" SET ""status"" = 'active' WHERE ""status"" IS NULL;
-                            UPDATE ""master_budget"" SET ""created_by"" = 1 WHERE ""created_by"" IS NULL;
                         ";
                         try { cmd.ExecuteNonQuery(); } catch { }
                     }
                 });
-
-                // ── Step 4b: MySQL-only schema patches ───────────────────────────
-                string mode = Config["AppSettings:DatabaseMode"] ?? "Local";
-                if (mode != "Local")
-                {
-                    await Task.Run(() =>
-                    {
-                        try { dbContext.Database.ExecuteSqlRaw("ALTER TABLE tbl_offices ADD COLUMN office_code VARCHAR(30) NULL AFTER name;"); } catch { }
-                        try { dbContext.Database.ExecuteSqlRaw("ALTER TABLE tbl_offices ALTER COLUMN active SET DEFAULT 1;"); } catch { }
-
-
-                    });
-                }
 
                 // ── Step 5: Seed only after tables are confirmed to exist ─────────
                 if (usersTableExists)
@@ -441,6 +460,42 @@ public partial class App : Application
         // Show login window only AFTER the database is fully initialized
         var loginWindow = AppHost.Services.GetRequiredService<GoodGovernanceApp.Views.LoginWindow>();
         loginWindow.Show();
+    }
+
+    private static bool ShouldInitializeLegacySqliteDatabase() => false;
+
+    private static async Task EnsureRemoteSupportTablesAsync(
+        AppDbContext dbContext,
+        CancellationToken cancellationToken)
+    {
+        await dbContext.Database.ExecuteSqlRawAsync(@"
+            CREATE TABLE IF NOT EXISTS `crs_beneficiary_cache` (
+                `beneficiary_cache_id` INT NOT NULL AUTO_INCREMENT,
+                `beneficiary_id` VARCHAR(45) NOT NULL,
+                `full_name` VARCHAR(100) NULL,
+                `first_name` VARCHAR(50) NULL,
+                `last_name` VARCHAR(50) NULL,
+                `middle_name` VARCHAR(50) NULL,
+                `sex` VARCHAR(10) NULL,
+                `age` INT NULL,
+                `address` LONGTEXT NULL,
+                `date_of_birth` DATE NULL,
+                `marital_status` VARCHAR(20) NULL,
+                `is_pwd` TINYINT(1) NOT NULL DEFAULT 0,
+                `is_senior` TINYINT(1) NOT NULL DEFAULT 0,
+                `cached_at` DATETIME(6) NOT NULL,
+                PRIMARY KEY (`beneficiary_cache_id`),
+                UNIQUE KEY `IX_crs_beneficiary_cache_beneficiary_id` (`beneficiary_id`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;",
+            cancellationToken);
+
+        await dbContext.Database.ExecuteSqlRawAsync(@"
+            CREATE TABLE IF NOT EXISTS `copyrightprofile` (
+                `id` INT NOT NULL AUTO_INCREMENT,
+                `PhotoAddress` VARCHAR(500) NULL,
+                PRIMARY KEY (`id`)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;",
+            cancellationToken);
     }
 
     protected override async void OnExit(ExitEventArgs e)
