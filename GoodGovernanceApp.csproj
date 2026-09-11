@@ -8,7 +8,7 @@
     <UseWPF>true</UseWPF>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <SelfContained>true</SelfContained>
-    <ApplicationIcon>Assets\Images\ggms.ico</ApplicationIcon>
+    <ApplicationIcon>Assets\Images\applicationlogo.ico</ApplicationIcon>
     <Version>1.0.8</Version>
   </PropertyGroup>
 
@@ -48,16 +48,19 @@
   <ItemGroup>
     <None Remove="Assets\Images\bg.jpg" />
     <None Remove="Assets\Images\ggms.ico" />
-    <None Remove="Assets\Images\company_profile_logo.jpg" />
-    <None Remove="Assets\Images\system_profile.png" />
-    <None Remove="Assets\Images\copyright.png" />
+    <None Remove="Assets\Images\applicationlogo.ico" />
+    <None Remove="Assets\Images\login.png" />
+    <None Remove="Assets\Images\sulopgov.png" />
+    <None Remove="Assets\Images\sulopgovsolo.png" />
   </ItemGroup>
   <ItemGroup>
     <Resource Include="Assets\Images\bg.jpg" />
     <Resource Include="Assets\Images\ggms.ico" />
-    <Resource Include="Assets\Images\company_profile_logo.jpg" />
-    <Resource Include="Assets\Images\system_profile.png" />
-    <Resource Include="Assets\Images\copyright.png" />
+    <Resource Include="Assets\Images\applicationlogo.ico" />
+    <Resource Include="Assets\Images\login.png" />
+    <Resource Include="Assets\Images\sulopgov.png" />
+    <Resource Include="Assets\Images\sulopgovsolo.png" />
+    <Resource Include="asset\applicationlogo.png" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="Assets\Images\*.*">
