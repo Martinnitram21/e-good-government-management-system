@@ -429,7 +429,7 @@ public class ReportsViewModel : ViewModelBase
                         SUM(CASE WHEN CAST(age AS UNSIGNED) BETWEEN 18 AND 35  THEN 1 ELSE 0 END) AS age_18_35,
                         SUM(CASE WHEN CAST(age AS UNSIGNED) BETWEEN 36 AND 60  THEN 1 ELSE 0 END) AS age_36_60,
                         SUM(CASE WHEN CAST(age AS UNSIGNED) > 60               THEN 1 ELSE 0 END) AS age_60_plus
-                    FROM val_beneficiaries;";
+                    FROM `crs_db`.`val_beneficiaries`;";
 
                 using var cmd    = new MySqlConnector.MySqlCommand(sql, conn);
                 using var reader = await cmd.ExecuteReaderAsync();
@@ -825,7 +825,7 @@ public class ReportsViewModel : ViewModelBase
                 var inClause    = string.Join(",", paramNames);
                 var sql         = $@"
                     SELECT beneficiary_id, sex, age, address, marital_status, is_pwd, is_senior
-                    FROM   val_beneficiaries
+                    FROM   `crs_db`.`val_beneficiaries`
                     WHERE  beneficiary_id IN ({inClause});";
 
                 using var cmd = new MySqlConnector.MySqlCommand(sql, conn);
