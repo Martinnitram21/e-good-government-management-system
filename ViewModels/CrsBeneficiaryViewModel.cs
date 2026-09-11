@@ -1,7 +1,8 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
-using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Data;
 using System.Windows.Input;
@@ -9,8 +10,9 @@ using GoodGovernanceApp.Models;
 using GoodGovernanceApp.Utilities;
 using GoodGovernanceApp.ViewModels;
 using GoodGovernanceApp.Data;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Data.Sqlite;
+using MySqlConnector;
 
 namespace GoodGovernanceApp.ViewModels;
 
@@ -21,14 +23,17 @@ public class CrsBeneficiaryViewModel : ViewModelBase
     private bool   _isLoading;
     private string _searchText           = string.Empty;
     private string _beneficiaryIdFilter  = string.Empty;
+    private IReadOnlyList<Beneficiary> _beneficiaries = Array.Empty<Beneficiary>();
+    private ICollectionView _beneficiariesView = null!;
+    private readonly SemaphoreSlim _loadGate = new(1, 1);
 
     // ── Collections ────────────────────────────────────────────────────────────
 
     /// <summary>Master list — never filtered directly.</summary>
-    public ObservableCollection<Beneficiary> Beneficiaries { get; } = new();
+    public IReadOnlyList<Beneficiary> Beneficiaries => _beneficiaries;
 
     /// <summary>Filtered view bound to the DataGrid.</summary>
-    public ICollectionView BeneficiariesView { get; }
+    public ICollectionView BeneficiariesView => _beneficiariesView;
 
     // ── Properties ─────────────────────────────────────────────────────────────
 
@@ -55,10 +60,10 @@ public class CrsBeneficiaryViewModel : ViewModelBase
         {
             _searchText = value;
             OnPropertyChanged();
-            BeneficiariesView.Refresh();
+            _beneficiariesView.Refresh();
             StatusMessage = string.IsNullOrWhiteSpace(value)
                 ? $"✅ Showing all {Beneficiaries.Count:N0} beneficiaries."
-                : $"🔍 Filtering by \"{value}\" — {BeneficiariesView.Cast<Beneficiary>().Count():N0} result(s) found.";
+                : $"🔍 Filtering by \"{value}\" — {_beneficiariesView.Cast<Beneficiary>().Count():N0} result(s) found.";
         }
     }
 
@@ -75,19 +80,22 @@ public class CrsBeneficiaryViewModel : ViewModelBase
     public ICommand OpenAnalyticsCommand { get; }
 
     private readonly AppDbContext _dbContext;
-    private readonly GoodGovernanceApp.Services.IConnectivityService _connectivityService;
     private readonly GoodGovernanceApp.Data.IDatabaseConfig _databaseConfig;
     private readonly GoodGovernanceApp.Services.ICrsBeneficiaryService _crsBeneficiaryService;
+    private readonly IServiceScopeFactory _scopeFactory;
 
     // ── Constructor ────────────────────────────────────────────────────────────
-    public CrsBeneficiaryViewModel(AppDbContext dbContext, GoodGovernanceApp.Services.IConnectivityService connectivityService, GoodGovernanceApp.Data.IDatabaseConfig databaseConfig, GoodGovernanceApp.Services.ICrsBeneficiaryService crsBeneficiaryService)
+    public CrsBeneficiaryViewModel(
+        AppDbContext dbContext,
+        GoodGovernanceApp.Data.IDatabaseConfig databaseConfig,
+        GoodGovernanceApp.Services.ICrsBeneficiaryService crsBeneficiaryService,
+        IServiceScopeFactory scopeFactory)
     {
         _dbContext = dbContext;
-        _connectivityService = connectivityService;
         _databaseConfig = databaseConfig;
         _crsBeneficiaryService = crsBeneficiaryService;
-        BeneficiariesView = CollectionViewSource.GetDefaultView(Beneficiaries);
-        BeneficiariesView.Filter = FilterBeneficiary;
+        _scopeFactory = scopeFactory;
+        SetBeneficiaries(Array.Empty<Beneficiary>());
 
         LoadCommand       = new RelayCommand(async _ => await LoadBeneficiariesAsync());
         ClearCommand      = new RelayCommand(_ => ClearSearch());
@@ -103,17 +111,29 @@ public class CrsBeneficiaryViewModel : ViewModelBase
         if (obj is not Beneficiary b) return false;
         if (string.IsNullOrWhiteSpace(_searchText)) return true;
 
-        var keyword = _searchText.Trim().ToLower();
+        var keyword = _searchText.Trim();
 
-        return (b.LastName?.ToLower().Contains(keyword) ?? false)
-            || (b.FirstName?.ToLower().Contains(keyword) ?? false)
-            || (b.MiddleName?.ToLower().Contains(keyword) ?? false)
-            || (b.FullName?.ToLower().Contains(keyword) ?? false)
-            || (b.BeneficiaryId?.ToLower().Contains(keyword) ?? false)
-            || (b.Address?.ToLower().Contains(keyword) ?? false)
-            || (b.Sex?.ToLower().Contains(keyword) ?? false)
-            || (b.MaritalStatus?.ToLower().Contains(keyword) ?? false)
-            || (b.DisabilityType?.ToLower().Contains(keyword) ?? false);
+        return ContainsIgnoreCase(b.LastName, keyword)
+            || ContainsIgnoreCase(b.FirstName, keyword)
+            || ContainsIgnoreCase(b.MiddleName, keyword)
+            || ContainsIgnoreCase(b.FullName, keyword)
+            || ContainsIgnoreCase(b.BeneficiaryId, keyword)
+            || ContainsIgnoreCase(b.Address, keyword)
+            || ContainsIgnoreCase(b.Sex, keyword)
+            || ContainsIgnoreCase(b.MaritalStatus, keyword)
+            || ContainsIgnoreCase(b.DisabilityType, keyword);
+    }
+
+    private static bool ContainsIgnoreCase(string? value, string keyword) =>
+        value?.Contains(keyword, StringComparison.OrdinalIgnoreCase) == true;
+
+    private void SetBeneficiaries(IReadOnlyList<Beneficiary> beneficiaries)
+    {
+        _beneficiaries = beneficiaries;
+        _beneficiariesView = CollectionViewSource.GetDefaultView(_beneficiaries);
+        _beneficiariesView.Filter = FilterBeneficiary;
+        OnPropertyChanged(nameof(Beneficiaries));
+        OnPropertyChanged(nameof(BeneficiariesView));
     }
 
     private void ClearSearch()
@@ -135,25 +155,31 @@ public class CrsBeneficiaryViewModel : ViewModelBase
     }
     private async Task LoadBeneficiariesAsync()
     {
+        if (!await _loadGate.WaitAsync(0))
+            return;
+
         IsLoading = true;
         StatusMessage = "Loading beneficiaries...";
-        Beneficiaries.Clear();
+        SetBeneficiaries(Array.Empty<Beneficiary>());
 
         try
         {
-            // Refresh now instead of relying on the background monitor's cached
-            // value; the page can be opened before its first CRS check completes.
-            await _connectivityService.RefreshNowAsync();
-
-            if (_connectivityService.IsCrsOnline)
+            try
             {
-                await LoadFromCloudAsync();
+                // The query itself is the authoritative connectivity check. This
+                // avoids a redundant test connection immediately before loading.
+                var beneficiaries = await LoadFromCloudAsync();
+                SetBeneficiaries(beneficiaries);
                 StatusMessage = $"✅ Loaded {Beneficiaries.Count:N0} beneficiaries from Cloud.";
+                _ = TryUpdateCacheAsync(beneficiaries);
             }
-            else
+            catch (Exception cloudException)
             {
-                await LoadFromCacheAsync();
-                StatusMessage = $"⚠️ Offline: Loaded {Beneficiaries.Count:N0} beneficiaries from Cache.";
+                var cached = await LoadFromCacheAsync();
+                SetBeneficiaries(cached);
+                StatusMessage = cached.Count > 0
+                    ? $"⚠️ CRS server unavailable: loaded {cached.Count:N0} cached beneficiaries."
+                    : $"❌ CRS server unavailable and no cache was found: {cloudException.Message}";
             }
         }
         catch (Exception ex)
@@ -163,15 +189,23 @@ public class CrsBeneficiaryViewModel : ViewModelBase
         finally
         {
             IsLoading = false;
+            _loadGate.Release();
         }
     }
 
     public Task LoadAsync() => LoadBeneficiariesAsync();
 
-    private async Task LoadFromCloudAsync(string? filterId = null)
+    private async Task<List<Beneficiary>> LoadFromCloudAsync(string? filterId = null)
     {
-        using var conn = new MySqlConnector.MySqlConnection(_databaseConfig.CrsConnectionString);
-        await conn.OpenAsync();
+        var connectionBuilder = new MySqlConnectionStringBuilder(_databaseConfig.CrsConnectionString)
+        {
+            ConnectionTimeout = 6,
+            DefaultCommandTimeout = 30,
+            Pooling = true
+        };
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(35));
+        await using var conn = new MySqlConnection(connectionBuilder.ConnectionString);
+        await conn.OpenAsync(timeout.Token).ConfigureAwait(false);
 
         string sql = @"
             SELECT
@@ -188,15 +222,13 @@ public class CrsBeneficiaryViewModel : ViewModelBase
             
         sql += " ORDER BY last_name, first_name LIMIT 1000;";
 
-        using var cmd = new MySqlConnector.MySqlCommand(sql, conn);
+        await using var cmd = new MySqlCommand(sql, conn) { CommandTimeout = 30 };
         if (!string.IsNullOrEmpty(filterId))
             cmd.Parameters.AddWithValue("@id", $"%{filterId}%");
 
-        using var reader = await cmd.ExecuteReaderAsync();
-
-
-
-        while (await reader.ReadAsync())
+        var beneficiaries = new List<Beneficiary>(1000);
+        await using var reader = await cmd.ExecuteReaderAsync(timeout.Token).ConfigureAwait(false);
+        while (await reader.ReadAsync(timeout.Token).ConfigureAwait(false))
         {
             var b = new Beneficiary
             {
@@ -224,29 +256,33 @@ public class CrsBeneficiaryViewModel : ViewModelBase
                 CreatedAt = reader.IsDBNull(reader.GetOrdinal("created_at")) ? null : reader.GetDateTime("created_at"),
                 UpdatedAt = reader.IsDBNull(reader.GetOrdinal("updated_at")) ? null : reader.GetDateTime("updated_at"),
             };
-            Beneficiaries.Add(b);
+            beneficiaries.Add(b);
         }
 
-        await reader.DisposeAsync();
-        await TryUpdateCacheAsync(Beneficiaries.ToList());
+        return beneficiaries;
     }
 
     private async Task TryUpdateCacheAsync(IReadOnlyCollection<Beneficiary> beneficiaries)
     {
         try
         {
+            using var scope = _scopeFactory.CreateScope();
+            var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
             var beneficiaryIds = beneficiaries
                 .Select(b => b.BeneficiaryId)
                 .Where(id => !string.IsNullOrWhiteSpace(id))
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToList();
 
-            var existing = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions
-                .ToListAsync(_dbContext.CrsBeneficiaryCaches
-                    .Where(cache => beneficiaryIds.Contains(cache.BeneficiaryId)));
+            var existing = await dbContext.CrsBeneficiaryCaches
+                .Where(cache => beneficiaryIds.Contains(cache.BeneficiaryId))
+                .ToListAsync()
+                .ConfigureAwait(false);
             var existingById = existing.ToDictionary(
                 cache => cache.BeneficiaryId,
                 StringComparer.OrdinalIgnoreCase);
+
+            dbContext.ChangeTracker.AutoDetectChangesEnabled = false;
 
             foreach (var beneficiary in beneficiaries)
             {
@@ -256,7 +292,7 @@ public class CrsBeneficiaryViewModel : ViewModelBase
                 if (!existingById.TryGetValue(beneficiary.BeneficiaryId, out var cache))
                 {
                     cache = new CrsBeneficiaryCache { BeneficiaryId = beneficiary.BeneficiaryId };
-                    _dbContext.CrsBeneficiaryCaches.Add(cache);
+                    dbContext.CrsBeneficiaryCaches.Add(cache);
                     existingById[beneficiary.BeneficiaryId] = cache;
                 }
 
@@ -273,7 +309,8 @@ public class CrsBeneficiaryViewModel : ViewModelBase
                 cache.CachedAt = DateTime.Now;
             }
 
-            await _dbContext.SaveChangesAsync();
+            dbContext.ChangeTracker.DetectChanges();
+            await dbContext.SaveChangesAsync().ConfigureAwait(false);
         }
         catch (Exception ex)
         {
@@ -283,18 +320,18 @@ public class CrsBeneficiaryViewModel : ViewModelBase
         }
     }
 
-    private async Task LoadFromCacheAsync(string? filterId = null)
+    private async Task<List<Beneficiary>> LoadFromCacheAsync(string? filterId = null)
     {
-        var query = _dbContext.CrsBeneficiaryCaches.AsQueryable();
+        using var scope = _scopeFactory.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+        var query = dbContext.CrsBeneficiaryCaches.AsNoTracking().AsQueryable();
 
         if (!string.IsNullOrEmpty(filterId))
             query = query.Where(c => c.BeneficiaryId.Contains(filterId));
 
-        var cachedItems = query.Take(1000).ToList();
+        var cachedItems = await query.Take(1000).ToListAsync().ConfigureAwait(false);
 
-        foreach (var cache in cachedItems)
-        {
-            Beneficiaries.Add(new Beneficiary
+        return cachedItems.Select(cache => new Beneficiary
             {
                 BeneficiaryId = cache.BeneficiaryId,
                 FullName = cache.FullName,
@@ -307,9 +344,7 @@ public class CrsBeneficiaryViewModel : ViewModelBase
                 MaritalStatus = cache.MaritalStatus,
                 IsPwd = cache.IsPwd,
                 IsSenior = cache.IsSenior
-            });
-        }
-        await Task.CompletedTask;
+            }).ToList();
     }
 
     // ── Search by Beneficiary ID ────────────────────────────────────────────────
@@ -318,27 +353,31 @@ public class CrsBeneficiaryViewModel : ViewModelBase
         string id = BeneficiaryIdFilter.Trim();
         if (string.IsNullOrWhiteSpace(id)) return;
 
+        if (!await _loadGate.WaitAsync(0))
+            return;
+
         IsLoading = true;
         StatusMessage = $"Searching for Beneficiary ID: {id}…";
-        Beneficiaries.Clear();
+        SetBeneficiaries(Array.Empty<Beneficiary>());
 
         try
         {
-            await _connectivityService.RefreshNowAsync();
-
-            if (_connectivityService.IsCrsOnline)
+            try
             {
-                await LoadFromCloudAsync(id);
+                var beneficiaries = await LoadFromCloudAsync(id);
+                SetBeneficiaries(beneficiaries);
                 StatusMessage = Beneficiaries.Count > 0
                     ? $"✅ Found {Beneficiaries.Count:N0} result(s) from Cloud for ID '{id}'."
                     : $"⚠️ No beneficiary found with ID '{id}'.";
+                _ = TryUpdateCacheAsync(beneficiaries);
             }
-            else
+            catch (Exception cloudException)
             {
-                await LoadFromCacheAsync(id);
+                var cached = await LoadFromCacheAsync(id);
+                SetBeneficiaries(cached);
                 StatusMessage = Beneficiaries.Count > 0
                     ? $"⚠️ Offline: Found {Beneficiaries.Count:N0} result(s) in Cache for '{id}'."
-                    : $"⚠️ Offline: No beneficiary found in Cache with ID '{id}'.";
+                    : $"❌ Search failed and no cached result was found: {cloudException.Message}";
             }
         }
         catch (Exception ex)
@@ -348,6 +387,7 @@ public class CrsBeneficiaryViewModel : ViewModelBase
         finally
         {
             IsLoading = false;
+            _loadGate.Release();
         }
     }
 }
