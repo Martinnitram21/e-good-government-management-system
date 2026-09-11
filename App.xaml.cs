@@ -138,8 +138,13 @@ public partial class App : Application
                 {
                     try
                     {
+                        // e-KARD pattern: AppDbContext = Online/Remote (fully used primary),
+                        // CloudDbContext = Network/LAN (prefilled office server, editable in
+                        // Settings). The footer Sync button syncs Online -> Network.
+                        // Online credentials are never touched here; Network credentials
+                        // come from ConnectionStrings:NetworkConnection (prefilled).
                         var dbConfig = serviceProvider.GetRequiredService<IDatabaseConfig>();
-                        var connStr = dbConfig.ConnectionString;
+                        var connStr = dbConfig.NetworkConnectionString;
                         options.UseMySql(
                             connStr,
                             new MySqlServerVersion(new Version(8, 0, 31)),
@@ -235,35 +240,44 @@ public partial class App : Application
 
         base.OnStartup(e);
 
-        // The operational database is the configured remote MySQL server. Verify
-        // both connectivity and the users table before the login window appears.
-        using (var scope = AppHost.Services.CreateScope())
+        // Show login immediately so a slow/unreachable hosted DB never leaves a
+        // white screen. The Remote reachability check runs in the background and
+        // only warns — same functionality, non-blocking startup.
+        var loginWindow = AppHost.Services.GetRequiredService<GoodGovernanceApp.Views.LoginWindow>();
+        loginWindow.Show();
+
+        _ = Task.Run(async () =>
         {
-            try
+            // The operational database is the configured remote MySQL server. Verify
+            // both connectivity and the users table after the login window appears.
+            using (var scope = AppHost.Services.CreateScope())
             {
-                var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-                using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(15));
-                if (!await dbContext.Database.CanConnectAsync(timeout.Token))
-                    throw new InvalidOperationException("The configured remote database could not be reached.");
+                try
+                {
+                    var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+                    using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+                    if (!await dbContext.Database.CanConnectAsync(timeout.Token))
+                        throw new InvalidOperationException("The configured remote database could not be reached.");
 
-                await EnsureRemoteSupportTablesAsync(dbContext, timeout.Token);
+                    await EnsureRemoteSupportTablesAsync(dbContext, timeout.Token);
 
-                await dbContext.Users.AsNoTracking()
-                    .Select(user => user.Id)
-                    .Take(1)
-                    .ToListAsync(timeout.Token);
+                    await dbContext.Users.AsNoTracking()
+                        .Select(user => user.Id)
+                        .Take(1)
+                        .ToListAsync(timeout.Token);
+                }
+                catch (Exception ex)
+                {
+                    string detail = ex.InnerException?.Message ?? ex.Message;
+                    await Dispatcher.InvokeAsync(() => MessageBox.Show(
+                        $"Active database connection failed (REMOTE).\n\n{detail}\n\n" +
+                        "Please check your internet connection and the Remote database settings, then restart the application.",
+                        "Database Unavailable",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Error));
+                }
             }
-            catch (Exception ex)
-            {
-                string detail = ex.InnerException?.Message ?? ex.Message;
-                MessageBox.Show(
-                    $"Active database connection failed (REMOTE).\n\n{detail}\n\n" +
-                    "Please check your internet connection and the Remote database settings, then restart the application.",
-                    "Database Unavailable",
-                    MessageBoxButton.OK,
-                    MessageBoxImage.Error);
-            }
-        }
+        });
 
         // ── Initialise SQLite database BEFORE showing the login window ──────────
         if (ShouldInitializeLegacySqliteDatabase())
@@ -475,9 +489,7 @@ public partial class App : Application
             }
         });
 
-        // Show login window only AFTER the database is fully initialized
-        var loginWindow = AppHost.Services.GetRequiredService<GoodGovernanceApp.Views.LoginWindow>();
-        loginWindow.Show();
+        // Login was already shown above (non-blocking startup); nothing left to do here.
     }
 
     private static bool ShouldInitializeLegacySqliteDatabase() => false;
