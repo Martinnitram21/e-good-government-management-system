@@ -1,7 +1,10 @@
 using GoodGovernanceApp.Data;
 using GoodGovernanceApp.Models;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using MySqlConnector;
 using System;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace GoodGovernanceApp.Services;
@@ -24,13 +27,11 @@ public interface ICrsBeneficiaryService
 public class CrsBeneficiaryService : ICrsBeneficiaryService
 {
     private readonly IServiceScopeFactory _scopeFactory;
-    private readonly IConnectivityService _connectivityService;
     private readonly IDatabaseConfig _dbConfig;
 
-    public CrsBeneficiaryService(IServiceScopeFactory scopeFactory, IConnectivityService connectivityService, IDatabaseConfig dbConfig)
+    public CrsBeneficiaryService(IServiceScopeFactory scopeFactory, IDatabaseConfig dbConfig)
     {
         _scopeFactory = scopeFactory;
-        _connectivityService = connectivityService;
         _dbConfig = dbConfig;
     }
     /// <summary>
@@ -50,12 +51,9 @@ public class CrsBeneficiaryService : ICrsBeneficiaryService
 
         try
         {
-            await _connectivityService.RefreshNowAsync();
-
-            if (_connectivityService.IsCrsOnline)
-                return await FetchFromCloudAsync(beneficiaryId);
-            else
-                return await FetchFromCacheAsync(beneficiaryId);
+            // Query CRS directly; a separate connectivity probe would duplicate
+            // both the TCP and database connection work for every lookup.
+            return await FetchFromCloudAsync(beneficiaryId);
         }
         catch (Exception ex)
         {
@@ -71,8 +69,15 @@ public class CrsBeneficiaryService : ICrsBeneficiaryService
     // ── Cloud fetch ─────────────────────────────────────────────────────────────
     private async Task<Beneficiary?> FetchFromCloudAsync(string beneficiaryId)
     {
-        using var conn = new MySqlConnector.MySqlConnection(_dbConfig.CrsConnectionString);
-        await conn.OpenAsync();
+        var connectionBuilder = new MySqlConnectionStringBuilder(_dbConfig.CrsConnectionString)
+        {
+            ConnectionTimeout = 6,
+            DefaultCommandTimeout = 20,
+            Pooling = true
+        };
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(25));
+        await using var conn = new MySqlConnection(connectionBuilder.ConnectionString);
+        await conn.OpenAsync(timeout.Token).ConfigureAwait(false);
 
         const string sql = @"
             SELECT
@@ -86,11 +91,11 @@ public class CrsBeneficiaryService : ICrsBeneficiaryService
             WHERE beneficiary_id = @id
             LIMIT 1;";
 
-        using var cmd = new MySqlConnector.MySqlCommand(sql, conn);
+        await using var cmd = new MySqlCommand(sql, conn) { CommandTimeout = 20 };
         cmd.Parameters.AddWithValue("@id", beneficiaryId);
 
-        using var reader = await cmd.ExecuteReaderAsync();
-        if (!await reader.ReadAsync())
+        await using var reader = await cmd.ExecuteReaderAsync(timeout.Token).ConfigureAwait(false);
+        if (!await reader.ReadAsync(timeout.Token).ConfigureAwait(false))
             return null;
 
         var b = new Beneficiary
@@ -126,7 +131,7 @@ public class CrsBeneficiaryService : ICrsBeneficiaryService
         };
 
         // ── Opportunistic cache update ─────────────────────────────────────────
-        await UpdateCacheAsync(b);
+        _ = UpdateCacheAsync(b);
 
         return b;
     }
@@ -136,9 +141,10 @@ public class CrsBeneficiaryService : ICrsBeneficiaryService
         using var scope = _scopeFactory.CreateScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
-        var cache = await System.Threading.Tasks.Task.Run(() =>
-            dbContext.CrsBeneficiaryCaches
-                     .FirstOrDefault(c => c.BeneficiaryId == beneficiaryId));
+        var cache = await dbContext.CrsBeneficiaryCaches
+            .AsNoTracking()
+            .FirstOrDefaultAsync(c => c.BeneficiaryId == beneficiaryId)
+            .ConfigureAwait(false);
 
         if (cache == null) return null;
 
@@ -170,9 +176,9 @@ public class CrsBeneficiaryService : ICrsBeneficiaryService
             using var scope = _scopeFactory.CreateScope();
             var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
-            var cache = await System.Threading.Tasks.Task.Run(() =>
-                dbContext.CrsBeneficiaryCaches
-                         .FirstOrDefault(c => c.BeneficiaryId == b.BeneficiaryId));
+            var cache = await dbContext.CrsBeneficiaryCaches
+                .FirstOrDefaultAsync(c => c.BeneficiaryId == b.BeneficiaryId)
+                .ConfigureAwait(false);
 
             if (cache == null)
             {
@@ -197,7 +203,7 @@ public class CrsBeneficiaryService : ICrsBeneficiaryService
             if (b.DateOfBirth.HasValue)
                 cache.DateOfBirth = DateOnly.FromDateTime(b.DateOfBirth.Value);
 
-            await dbContext.SaveChangesAsync();
+            await dbContext.SaveChangesAsync().ConfigureAwait(false);
         }
         catch (Exception ex)
         {
