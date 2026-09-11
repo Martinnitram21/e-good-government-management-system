@@ -26,10 +26,33 @@ public class DatabaseConfig : IDatabaseConfig
         _config = config;
     }
 
+    public string ActiveMode
+    {
+        get
+        {
+            string mode = _config["AppSettings:DatabaseMode"] ?? "Remote";
+            return mode;
+        }
+    }
+
     public string ConnectionString
     {
         get
         {
+            // The footer status shows ONLY this connection — the database the
+            // system is actually using. Remote (Online) is the default;
+            // Network (LAN) is used when DatabaseMode is set to Network/LAN.
+            string mode = (_config["AppSettings:DatabaseMode"] ?? "Remote").Trim();
+            if (mode.Equals("Network", StringComparison.OrdinalIgnoreCase)
+                || mode.Equals("LAN", StringComparison.OrdinalIgnoreCase)
+                || mode.Equals("LanConnection", StringComparison.OrdinalIgnoreCase))
+            {
+                string lan = _config.GetConnectionString("NetworkConnection")
+                    ?? _config.GetConnectionString("LanConnection");
+                if (!string.IsNullOrWhiteSpace(lan))
+                    return lan;
+            }
+
             return _config.GetConnectionString("RemoteConnection")
                 ?? _config.GetConnectionString("LocalConnection")
                 ?? "Server=194.59.164.58;Port=3306;Database=u621755393_ggms;User=u621755393_ggms_user;Password=Ggms@2026;AllowZeroDateTime=True;ConvertZeroDateTime=True;";
