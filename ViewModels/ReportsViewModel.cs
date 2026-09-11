@@ -53,7 +53,7 @@ public class ReportsViewModel : ViewModelBase
         {
             _selectedReportType = value;
             OnPropertyChanged();
-            _ = GenerateReportAsync();
+            RequestGenerateReport();
         }
     }
 
@@ -75,7 +75,7 @@ public class ReportsViewModel : ViewModelBase
         {
             _selectedYear = value;
             OnPropertyChanged();
-            _ = GenerateReportAsync();
+            RequestGenerateReport();
         }
     }
 
@@ -87,7 +87,7 @@ public class ReportsViewModel : ViewModelBase
         {
             _selectedMonth = value;
             OnPropertyChanged();
-            _ = GenerateReportAsync();
+            RequestGenerateReport();
         }
     }
 
@@ -124,6 +124,23 @@ public class ReportsViewModel : ViewModelBase
     // ── Commands ──────────────────────────────────────────────────────────────
     public ICommand GenerateReportCommand { get; }
     public ICommand PrintExportCommand    { get; }
+
+    // Debounce rapid filter changes so typing/clicking doesn't stack concurrent
+    // full-table report queries. Same report output, no overlapping runs.
+    private System.Threading.CancellationTokenSource? _reportDebounceCts;
+    private void RequestGenerateReport()
+    {
+        try { _reportDebounceCts?.Cancel(); } catch { }
+        _reportDebounceCts = new System.Threading.CancellationTokenSource();
+        var token = _reportDebounceCts.Token;
+        _ = Task.Run(async () =>
+        {
+            try { await Task.Delay(250, token); }
+            catch (TaskCanceledException) { return; }
+            if (token.IsCancellationRequested) return;
+            await GenerateReportAsync();
+        });
+    }
 
     // ── Constructor ───────────────────────────────────────────────────────────
     public ReportsViewModel(AppDbContext context, GoodGovernanceApp.Services.IConnectivityService connectivityService, GoodGovernanceApp.Data.IDatabaseConfig dbConfig)
