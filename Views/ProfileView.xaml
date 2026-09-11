@@ -28,13 +28,14 @@
 
                 <!-- Left Column: Primary Identity -->
                 <StackPanel Grid.Column="0" Margin="0 0 48 0">
-                    <!-- Profile Photo Container -->
+                    <!-- Profile photo -->
                     <Grid Width="160" Height="160" HorizontalAlignment="Center" Margin="0 0 0 16">
-                        <!-- Fallback Icon -->
-                        <materialDesign:PackIcon Kind="AccountCircle" Width="160" Height="160"
-                                                 Foreground="{DynamicResource PrimaryHueMidBrush}" />
-                        
-                        <!-- Actual Photo -->
+                        <!-- Municipal seal is shown when the user has no uploaded photo. -->
+                        <Image Source="pack://application:,,,/GoodGovernanceApp;component/Assets/Images/login.png"
+                               Stretch="Uniform"
+                               RenderOptions.BitmapScalingMode="HighQuality"/>
+                         
+                        <!-- An uploaded profile photo replaces the default seal. -->
                         <Ellipse>
                             <Ellipse.Fill>
                                 <ImageBrush ImageSource="{Binding ProfilePhotoSource}" Stretch="UniformToFill" />
