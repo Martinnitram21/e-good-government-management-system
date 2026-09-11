@@ -20,7 +20,7 @@
 
 #define MyAppName "Good Governance Management System"
 #define MyAppShortName "GoodGovernanceSystem"
-#define MyAppVersion "1.0.2"
+#define MyAppVersion "1.0.6"
 #define MyAppPublisher "Good Governance System"
 #define MyAppExeName "GoodGovernanceApp.exe"
 
