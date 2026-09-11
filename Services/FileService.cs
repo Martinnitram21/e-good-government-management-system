@@ -10,13 +10,21 @@ public class FileService
 
     public FileService()
     {
-        // Store files in an 'Uploads' folder in the application execution directory
-        _uploadDirectory = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Uploads");
-        
-        if (!Directory.Exists(_uploadDirectory))
+        // Program Files is read-only for standard users. Keep uploaded files in
+        // the same per-user writable application-data root as the configuration.
+        string appDataRoot = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+        if (string.IsNullOrWhiteSpace(appDataRoot))
         {
-            Directory.CreateDirectory(_uploadDirectory);
+            appDataRoot = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
         }
+
+        if (string.IsNullOrWhiteSpace(appDataRoot))
+        {
+            throw new InvalidOperationException("A writable application-data folder could not be located.");
+        }
+
+        _uploadDirectory = Path.Combine(appDataRoot, "GoodGovernanceApp", "Uploads");
+        Directory.CreateDirectory(_uploadDirectory);
     }
 
     public async Task<string> SaveFileAsync(string sourceFilePath)
