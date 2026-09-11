@@ -141,6 +141,10 @@ public class CrsBeneficiaryViewModel : ViewModelBase
 
         try
         {
+            // Refresh now instead of relying on the background monitor's cached
+            // value; the page can be opened before its first CRS check completes.
+            await _connectivityService.RefreshNowAsync();
+
             if (_connectivityService.IsCrsOnline)
             {
                 await LoadFromCloudAsync();
@@ -162,6 +166,8 @@ public class CrsBeneficiaryViewModel : ViewModelBase
         }
     }
 
+    public Task LoadAsync() => LoadBeneficiariesAsync();
+
     private async Task LoadFromCloudAsync(string? filterId = null)
     {
         using var conn = new MySqlConnector.MySqlConnection(_databaseConfig.CrsConnectionString);
@@ -175,12 +181,12 @@ public class CrsBeneficiaryViewModel : ViewModelBase
                 is_pwd, pwd_id_no, is_senior, senior_id_no,
                 disability_type, cause_of_disability,
                 created_at, updated_at
-            FROM val_beneficiaries ";
+            FROM `crs_db`.`val_beneficiaries` ";
 
         if (!string.IsNullOrEmpty(filterId))
             sql += " WHERE beneficiary_id LIKE @id ";
             
-        sql += " ORDER BY last_name, first_name LIMIT 50;";
+        sql += " ORDER BY last_name, first_name LIMIT 1000;";
 
         using var cmd = new MySqlConnector.MySqlCommand(sql, conn);
         if (!string.IsNullOrEmpty(filterId))
@@ -195,7 +201,8 @@ public class CrsBeneficiaryViewModel : ViewModelBase
             var b = new Beneficiary
             {
                 Id = reader.GetInt64("id"),
-                ResidentsId = reader.GetInt64("residents_id"),
+                ResidentsId = reader.IsDBNull(reader.GetOrdinal("residents_id"))
+                    ? 0 : reader.GetInt64("residents_id"),
                 BeneficiaryId = reader["beneficiary_id"]?.ToString() ?? "",
                 UserId = reader.IsDBNull(reader.GetOrdinal("user_id")) ? null : reader.GetInt32("user_id"),
                 CivilRegistryId = reader["civilregistry_id"]?.ToString(),
@@ -208,9 +215,9 @@ public class CrsBeneficiaryViewModel : ViewModelBase
                 AgeRaw = reader["age"]?.ToString(),
                 MaritalStatus = reader["marital_status"]?.ToString(),
                 Address = reader["address"]?.ToString(),
-                IsPwd = reader.GetInt32("is_pwd") == 1,
+                IsPwd = !reader.IsDBNull(reader.GetOrdinal("is_pwd")) && reader.GetInt32("is_pwd") == 1,
                 PwdIdNo = reader["pwd_id_no"]?.ToString(),
-                IsSenior = reader.GetInt32("is_senior") == 1,
+                IsSenior = !reader.IsDBNull(reader.GetOrdinal("is_senior")) && reader.GetInt32("is_senior") == 1,
                 SeniorIdNo = reader["senior_id_no"]?.ToString(),
                 DisabilityType = reader["disability_type"]?.ToString(),
                 CauseOfDisability = reader["cause_of_disability"]?.ToString(),
@@ -218,27 +225,62 @@ public class CrsBeneficiaryViewModel : ViewModelBase
                 UpdatedAt = reader.IsDBNull(reader.GetOrdinal("updated_at")) ? null : reader.GetDateTime("updated_at"),
             };
             Beneficiaries.Add(b);
-
-            // Update Cache
-            var cache = _dbContext.CrsBeneficiaryCaches.FirstOrDefault(c => c.BeneficiaryId == b.BeneficiaryId);
-            if (cache == null)
-            {
-                cache = new CrsBeneficiaryCache { BeneficiaryId = b.BeneficiaryId };
-                _dbContext.CrsBeneficiaryCaches.Add(cache);
-            }
-            cache.FullName = b.FullName;
-            cache.FirstName = b.FirstName;
-            cache.LastName = b.LastName;
-            cache.MiddleName = b.MiddleName;
-            cache.Sex = b.Sex;
-            if (int.TryParse(b.AgeRaw, out int age)) cache.Age = age;
-            cache.Address = b.Address;
-            cache.MaritalStatus = b.MaritalStatus;
-            cache.IsPwd = b.IsPwd;
-            cache.IsSenior = b.IsSenior;
-            cache.CachedAt = DateTime.Now;
         }
-        await _dbContext.SaveChangesAsync();
+
+        await reader.DisposeAsync();
+        await TryUpdateCacheAsync(Beneficiaries.ToList());
+    }
+
+    private async Task TryUpdateCacheAsync(IReadOnlyCollection<Beneficiary> beneficiaries)
+    {
+        try
+        {
+            var beneficiaryIds = beneficiaries
+                .Select(b => b.BeneficiaryId)
+                .Where(id => !string.IsNullOrWhiteSpace(id))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            var existing = await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions
+                .ToListAsync(_dbContext.CrsBeneficiaryCaches
+                    .Where(cache => beneficiaryIds.Contains(cache.BeneficiaryId)));
+            var existingById = existing.ToDictionary(
+                cache => cache.BeneficiaryId,
+                StringComparer.OrdinalIgnoreCase);
+
+            foreach (var beneficiary in beneficiaries)
+            {
+                if (string.IsNullOrWhiteSpace(beneficiary.BeneficiaryId))
+                    continue;
+
+                if (!existingById.TryGetValue(beneficiary.BeneficiaryId, out var cache))
+                {
+                    cache = new CrsBeneficiaryCache { BeneficiaryId = beneficiary.BeneficiaryId };
+                    _dbContext.CrsBeneficiaryCaches.Add(cache);
+                    existingById[beneficiary.BeneficiaryId] = cache;
+                }
+
+                cache.FullName = beneficiary.FullName;
+                cache.FirstName = beneficiary.FirstName;
+                cache.LastName = beneficiary.LastName;
+                cache.MiddleName = beneficiary.MiddleName;
+                cache.Sex = beneficiary.Sex;
+                cache.Age = int.TryParse(beneficiary.AgeRaw, out int age) ? age : null;
+                cache.Address = beneficiary.Address;
+                cache.MaritalStatus = beneficiary.MaritalStatus;
+                cache.IsPwd = beneficiary.IsPwd;
+                cache.IsSenior = beneficiary.IsSenior;
+                cache.CachedAt = DateTime.Now;
+            }
+
+            await _dbContext.SaveChangesAsync();
+        }
+        catch (Exception ex)
+        {
+            // Cache is optional. A live CRS result must still be displayed even
+            // when the main online database is temporarily unavailable.
+            System.Diagnostics.Debug.WriteLine($"[CRS] Cache update skipped: {ex.Message}");
+        }
     }
 
     private async Task LoadFromCacheAsync(string? filterId = null)
@@ -248,7 +290,7 @@ public class CrsBeneficiaryViewModel : ViewModelBase
         if (!string.IsNullOrEmpty(filterId))
             query = query.Where(c => c.BeneficiaryId.Contains(filterId));
 
-        var cachedItems = query.Take(50).ToList();
+        var cachedItems = query.Take(1000).ToList();
 
         foreach (var cache in cachedItems)
         {
@@ -282,7 +324,9 @@ public class CrsBeneficiaryViewModel : ViewModelBase
 
         try
         {
-            if (!_connectivityService.IsCrsOnline)
+            await _connectivityService.RefreshNowAsync();
+
+            if (_connectivityService.IsCrsOnline)
             {
                 await LoadFromCloudAsync(id);
                 StatusMessage = Beneficiaries.Count > 0
