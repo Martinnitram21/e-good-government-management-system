@@ -62,7 +62,7 @@ public class ApplicationProfileViewModel : ViewModelBase
             // Ensure table exists
             string createTableQuery = @"
                 CREATE TABLE IF NOT EXISTS goveprofile (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    id INT AUTO_INCREMENT PRIMARY KEY,
                     GoveName NVARCHAR(255),
                     Address NVARCHAR(255),
                     LogoAddress NVARCHAR(500)
@@ -158,7 +158,7 @@ public class ApplicationProfileViewModel : ViewModelBase
                 string updateQuery = @"
                     UPDATE goveprofile 
                     SET GoveName = @goveName, Address = @address, LogoAddress = @logoAddress 
-                    WHERE id IN (SELECT id FROM goveprofile ORDER BY id ASC LIMIT 1);";
+                    ORDER BY id ASC LIMIT 1;";
                 
                 await _dbHelper.ExecuteNonQueryAsync(updateQuery,
                     new SqliteParameter("@goveName", GoveName),
