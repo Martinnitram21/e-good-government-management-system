@@ -3,6 +3,7 @@ using System.IO;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Input;
+using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using Microsoft.Win32;
 using Microsoft.Data.Sqlite;
@@ -17,7 +18,7 @@ public class ApplicationProfileViewModel : ViewModelBase
 {
     private readonly DatabaseHelper _dbHelper;
     private ApplicationProfileModel _profile = new();
-    private BitmapImage? _logoPreview;
+    private ImageSource? _logoPreview;
 
     public string GoveName
     {
@@ -37,7 +38,7 @@ public class ApplicationProfileViewModel : ViewModelBase
         set { _profile.LogoAddress = value; OnPropertyChanged(); }
     }
 
-    public BitmapImage? LogoPreview
+    public ImageSource? LogoPreview
     {
         get => _logoPreview;
         set { _logoPreview = value; OnPropertyChanged(); }
@@ -140,7 +141,7 @@ public class ApplicationProfileViewModel : ViewModelBase
 
     private void LoadLogoImage(string path)
     {
-        LogoPreview = ImageHelper.LoadBitmapSafe(path, "pack://application:,,,/GoodGovernanceApp;component/Assets/Images/company_profile_logo.jpg");
+        LogoPreview = ImageHelper.LoadLogoSafe(path, "pack://application:,,,/GoodGovernanceApp;component/Assets/Images/company_profile_logo.jpg");
     }
 
     private async Task ExecuteSaveAsync()
