@@ -19,23 +19,23 @@
                     </StackPanel>
                 </Button>
 
-                <!-- Center: actual database source and live reachability -->
+                <!-- Center: ONLY the database currently in use (single status) -->
                 <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
                     <materialDesign:PackIcon Kind="Database" Width="15" Height="15" Foreground="#333" Margin="0,0,5,0"/>
                     <TextBlock Text="ACTIVE DB:" Foreground="#333" FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center"/>
                     <TextBlock Text="{Binding ActiveDatabaseMode}" Foreground="#000" FontSize="11" FontWeight="Bold" Margin="4,0" VerticalAlignment="Center"/>
-                    <TextBlock Text="{Binding ActiveDatabaseStatusText}" FontSize="11" FontWeight="Bold" Margin="0,0,14,0" VerticalAlignment="Center">
+                    <TextBlock Text="{Binding ActiveDatabaseStatusText}" FontSize="11" FontWeight="Bold" Margin="0,0,0,0" VerticalAlignment="Center">
                         <TextBlock.Style>
                             <Style TargetType="TextBlock">
                                 <Setter Property="Foreground" Value="#B8860B"/>
                                 <Style.Triggers>
-                                    <DataTrigger Binding="{Binding IsOnline}" Value="True">
+                                    <DataTrigger Binding="{Binding ActiveConnectionIsOnline}" Value="True">
                                         <Setter Property="Foreground" Value="#5C8F28"/>
                                     </DataTrigger>
                                     <MultiDataTrigger>
                                         <MultiDataTrigger.Conditions>
                                             <Condition Binding="{Binding ConnectionCheckCompleted}" Value="True"/>
-                                            <Condition Binding="{Binding IsOnline}" Value="False"/>
+                                            <Condition Binding="{Binding ActiveConnectionIsOnline}" Value="False"/>
                                         </MultiDataTrigger.Conditions>
                                         <Setter Property="Foreground" Value="#D90000"/>
                                     </MultiDataTrigger>
@@ -43,47 +43,6 @@
                             </Style>
                         </TextBlock.Style>
                     </TextBlock>
-
-                    <TextBlock Text="LAN:" Foreground="#333" FontSize="10" FontWeight="SemiBold" VerticalAlignment="Center"/>
-                    <TextBlock Text="{Binding NetworkStatusText}" FontSize="10" FontWeight="Bold" Margin="4,0,12,0" VerticalAlignment="Center">
-                        <TextBlock.Style>
-                            <Style TargetType="TextBlock">
-                                <Setter Property="Foreground" Value="#B8860B"/>
-                                <Style.Triggers>
-                                    <DataTrigger Binding="{Binding IsNetworkOnline}" Value="True"><Setter Property="Foreground" Value="#5C8F28"/></DataTrigger>
-                                    <MultiDataTrigger>
-                                        <MultiDataTrigger.Conditions>
-                                            <Condition Binding="{Binding ConnectionCheckCompleted}" Value="True"/>
-                                            <Condition Binding="{Binding IsNetworkOnline}" Value="False"/>
-                                        </MultiDataTrigger.Conditions>
-                                        <Setter Property="Foreground" Value="#D90000"/>
-                                    </MultiDataTrigger>
-                                </Style.Triggers>
-                            </Style>
-                        </TextBlock.Style>
-                    </TextBlock>
-
-                    <TextBlock Text="CRS:" Foreground="#333" FontSize="10" FontWeight="SemiBold" VerticalAlignment="Center"/>
-                    <TextBlock Text="{Binding CrsStatusText}" FontSize="10" FontWeight="Bold" Margin="4,0,12,0" VerticalAlignment="Center">
-                        <TextBlock.Style>
-                            <Style TargetType="TextBlock">
-                                <Setter Property="Foreground" Value="#B8860B"/>
-                                <Style.Triggers>
-                                    <DataTrigger Binding="{Binding IsCrsOnline}" Value="True"><Setter Property="Foreground" Value="#5C8F28"/></DataTrigger>
-                                    <MultiDataTrigger>
-                                        <MultiDataTrigger.Conditions>
-                                            <Condition Binding="{Binding ConnectionCheckCompleted}" Value="True"/>
-                                            <Condition Binding="{Binding IsCrsOnline}" Value="False"/>
-                                        </MultiDataTrigger.Conditions>
-                                        <Setter Property="Foreground" Value="#D90000"/>
-                                    </MultiDataTrigger>
-                                </Style.Triggers>
-                            </Style>
-                        </TextBlock.Style>
-                    </TextBlock>
-
-                    <TextBlock Text="SQLITE:" Foreground="#333" FontSize="10" FontWeight="SemiBold" VerticalAlignment="Center"/>
-                    <TextBlock Text="{Binding SqliteStatusText}" Foreground="#777" FontSize="10" FontWeight="Bold" Margin="4,0,0,0" VerticalAlignment="Center"/>
                 </StackPanel>
 
                 <!-- Right: diagnostics, actions, profile, and time -->
