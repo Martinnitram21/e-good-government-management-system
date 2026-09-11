@@ -1,6 +1,5 @@
 using System;
 using System.Data;
-using System.IO;
 using System.Threading.Tasks;
 using Microsoft.Data.Sqlite;
 using MySqlConnector;
@@ -9,15 +8,21 @@ namespace GoodGovernanceApp.Data
 {
     public class DatabaseHelper
     {
-        private string GetLocalConnectionString()
+        private readonly IDatabaseConfig _databaseConfig;
+
+        public DatabaseHelper(IDatabaseConfig databaseConfig)
         {
-            string appDataFolder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "GoodGovernanceApp");
-            return $"Data Source={Path.Combine(appDataFolder, "ggms.db")}";
+            _databaseConfig = databaseConfig;
         }
 
-        public async Task<SqliteConnection> OpenConnectionAsync()
+        public async Task<MySqlConnection> OpenConnectionAsync()
         {
-            SqliteConnection connection = new SqliteConnection(GetLocalConnectionString());
+            var builder = new MySqlConnectionStringBuilder(_databaseConfig.ConnectionString)
+            {
+                ConnectionTimeout = 15,
+                DefaultCommandTimeout = 30
+            };
+            MySqlConnection connection = new MySqlConnection(builder.ConnectionString);
             await connection.OpenAsync();
             return connection;
         }
@@ -26,26 +31,12 @@ namespace GoodGovernanceApp.Data
         {
             try
             {
-                // This is generally testing the remote connection from SettingsViewModel
-                if (!string.IsNullOrEmpty(connectionStringOverride) && connectionStringOverride.Contains("Server="))
-                {
-                    using (var connection = new MySqlConnection(connectionStringOverride))
-                    {
-                        await connection.OpenAsync();
-                        return (true, "Cloud connection successful!");
-                    }
-                }
-                
-                string connectionString = connectionStringOverride ?? GetLocalConnectionString();
-                using (var connection = new SqliteConnection(connectionString))
+                string connectionString = connectionStringOverride ?? _databaseConfig.ConnectionString;
+                using (var connection = new MySqlConnection(connectionString))
                 {
                     await connection.OpenAsync();
-                    return (true, "Local connection successful!");
+                    return (true, "Remote connection successful!");
                 }
-            }
-            catch (SqliteException ex)
-            {
-                return (false, $"SQLite Error [{ex.SqliteErrorCode}]: {ex.Message}");
             }
             catch (MySqlException ex)
             {
@@ -61,12 +52,9 @@ namespace GoodGovernanceApp.Data
         {
             using (var connection = await OpenConnectionAsync())
             {
-                using (var command = new SqliteCommand(query, connection))
+                using (var command = new MySqlCommand(query, connection))
                 {
-                    if (parameters != null)
-                    {
-                        command.Parameters.AddRange(parameters);
-                    }
+                    AddParameters(command, parameters);
 
                     using (var reader = await command.ExecuteReaderAsync())
                     {
@@ -82,12 +70,9 @@ namespace GoodGovernanceApp.Data
         {
             using (var connection = await OpenConnectionAsync())
             {
-                using (var command = new SqliteCommand(query, connection))
+                using (var command = new MySqlCommand(query, connection))
                 {
-                    if (parameters != null)
-                    {
-                        command.Parameters.AddRange(parameters);
-                    }
+                    AddParameters(command, parameters);
 
                     return await command.ExecuteNonQueryAsync();
                 }
@@ -98,17 +83,23 @@ namespace GoodGovernanceApp.Data
         {
             using (var connection = await OpenConnectionAsync())
             {
-                using (var command = new SqliteCommand(query, connection))
+                using (var command = new MySqlCommand(query, connection))
                 {
-                    if (parameters != null)
-                    {
-                        command.Parameters.AddRange(parameters);
-                    }
+                    AddParameters(command, parameters);
 
                     var result = await command.ExecuteScalarAsync();
                     return result == DBNull.Value ? null : result;
                 }
             }
+        }
+
+        private static void AddParameters(MySqlCommand command, SqliteParameter[] parameters)
+        {
+            if (parameters == null)
+                return;
+
+            foreach (var parameter in parameters)
+                command.Parameters.AddWithValue(parameter.ParameterName, parameter.Value ?? DBNull.Value);
         }
     }
 }
