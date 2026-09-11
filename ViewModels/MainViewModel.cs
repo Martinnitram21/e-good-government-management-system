@@ -522,7 +522,10 @@ public class MainViewModel : ViewModelBase, IDisposable
         NavigationItems = new ObservableCollection<NavigationItem>(visibleItems);
 
         SidebarPrimaryItems = visibleItems
-            .Where(item => item.ViewToken is not "Settings" and not "Profile")
+            .Where(item => item.ViewToken is not "Settings"
+                           and not "Profile"
+                           and not "ConsolidatedTransactions"
+                           and not "BudgetAllocation")
             .ToList();
         SidebarTrailingItems = visibleItems
             .Where(item => item.ViewToken is "Settings" or "Profile")
