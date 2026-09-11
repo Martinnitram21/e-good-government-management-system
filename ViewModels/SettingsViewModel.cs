@@ -172,7 +172,7 @@ namespace GoodGovernanceApp.ViewModels
         }
 
         // ── Database Mode ────────────────────────────────────────────────────
-        private string _databaseMode = "Remote";
+        private string _databaseMode = "Online";
         public string DatabaseMode
         {
             get => _databaseMode;
@@ -473,7 +473,7 @@ namespace GoodGovernanceApp.ViewModels
         {
             IsTesting = true;
             SqliteTestResult = "Local SQLite: DISABLED (not used).";
-            GgmsTestResult = "Testing Remote...";
+            GgmsTestResult = "Testing Online...";
             NetworkTestResult = "Testing Network (LAN)...";
             CrsTestResult = "Testing CRS Database...";
 
@@ -492,7 +492,7 @@ namespace GoodGovernanceApp.ViewModels
             var (networkOk, networkMsg) = await networkTask;
             var (crsOk, crsMsg) = await crsTask;
 
-            GgmsTestResult = ggmsOk ? "✅ Remote: Connected" : $"⚠ Remote: Offline / Unreachable ({ggmsMsg})";
+            GgmsTestResult = ggmsOk ? "✅ Online: Connected" : $"⚠ Online: Offline / Unreachable ({ggmsMsg})";
             NetworkTestResult = networkOk ? "✅ Network (LAN): Connected" : $"⚠ Network (LAN): Offline / Unreachable ({networkMsg})";
             CrsTestResult = crsOk ? "✅ CRS Database: Connected" : $"⚠ CRS Database: Offline / Unreachable ({crsMsg})";
             IsTesting = false;
@@ -503,7 +503,7 @@ namespace GoodGovernanceApp.ViewModels
         private async Task ExecuteTestThree()
         {
             IsTesting = true;
-            GgmsTestResult = "Testing Remote...";
+            GgmsTestResult = "Testing Online...";
             NetworkTestResult = "Testing Network (LAN)...";
             CrsTestResult = "Testing CRS Database...";
 
@@ -517,7 +517,7 @@ namespace GoodGovernanceApp.ViewModels
             var (networkOk2, networkMsg2) = await networkTask;
             var (crsOk2, crsMsg2) = await crsTask;
 
-            GgmsTestResult = ggmsOk2 ? "✅ Remote: Connected" : $"⚠ Remote: Offline / Unreachable ({ggmsMsg2})";
+            GgmsTestResult = ggmsOk2 ? "✅ Online: Connected" : $"⚠ Online: Offline / Unreachable ({ggmsMsg2})";
             NetworkTestResult = networkOk2 ? "✅ Network (LAN): Connected" : $"⚠ Network (LAN): Offline / Unreachable ({networkMsg2})";
             CrsTestResult = crsOk2 ? "✅ CRS Database: Connected" : $"⚠ CRS Database: Offline / Unreachable ({crsMsg2})";
             IsTesting = false;
@@ -527,9 +527,9 @@ namespace GoodGovernanceApp.ViewModels
         private async Task ExecuteTestCloud()
         {
             IsTesting = true;
-            GgmsTestResult = "Testing Remote...";
+            GgmsTestResult = "Testing Online...";
             var (ok, msg) = await TestConnectionAsync(ActiveGgmsConnStr);
-            GgmsTestResult = ok ? "✅ Remote: Connected" : $"⚠ Remote: Offline / Unreachable ({msg})";
+            GgmsTestResult = ok ? "✅ Online: Connected" : $"⚠ Online: Offline / Unreachable ({msg})";
             IsTesting = false;
         }
 
@@ -580,9 +580,12 @@ namespace GoodGovernanceApp.ViewModels
         {
             try
             {
-                // Keep the saved mode (Remote/Network) so Save doesn't overwrite it.
-                string savedMode = _config["AppSettings:DatabaseMode"] ?? "Remote";
-                DatabaseMode = string.IsNullOrWhiteSpace(savedMode) ? "Remote" : savedMode.Trim();
+                // Display legacy "Remote" configurations as the renamed "Online" mode.
+                string savedMode = _config["AppSettings:DatabaseMode"] ?? "Online";
+                DatabaseMode = string.IsNullOrWhiteSpace(savedMode)
+                    || savedMode.Trim().Equals("Remote", StringComparison.OrdinalIgnoreCase)
+                        ? "Online"
+                        : savedMode.Trim();
 
                 // Read Remote Connection string from appsettings.json and split into fields
                 string rawRemote = _config.GetConnectionString("RemoteConnection") 
