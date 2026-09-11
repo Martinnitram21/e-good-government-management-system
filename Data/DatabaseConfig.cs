@@ -98,6 +98,7 @@ public class DatabaseConfig : IDatabaseConfig
             root["ConnectionStrings"] = new JsonObject();
 
         root["AppSettings"]!["DatabaseMode"] = "Remote";
+        root["AppSettings"]!["UseRemoteDatabase"] = true;
         root["ConnectionStrings"]!["RemoteConnection"] = ggmsConnStr;
         if (!string.IsNullOrWhiteSpace(networkConnStr))
             root["ConnectionStrings"]!["NetworkConnection"] = networkConnStr;
