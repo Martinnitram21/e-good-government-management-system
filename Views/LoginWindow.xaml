@@ -4,231 +4,583 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
-        xmlns:local="clr-namespace:GoodGovernanceApp.Views"
         xmlns:converters="clr-namespace:GoodGovernanceApp.Converters"
         mc:Ignorable="d"
-        Title="Good Governance Management - Login" 
-        Icon="pack://application:,,,/GoodGovernanceApp;component/Assets/Images/ggms.ico"
-        Height="642" Width="965"
-        WindowStartupLocation="CenterScreen" ResizeMode="NoResize"
-        TextElement.Foreground="{DynamicResource MaterialDesignBody}"
-        TextElement.FontWeight="Regular"
-        TextElement.FontSize="13"
-        TextOptions.TextFormattingMode="Ideal"
-        TextOptions.TextRenderingMode="Auto"
-        Background="{DynamicResource MaterialDesignPaper}"
-        FontFamily="{DynamicResource MaterialDesignFont}"
+        Title="Sulop Governance System - Login"
+        Icon="pack://application:,,,/GoodGovernanceApp;component/Assets/Images/applicationlogo.ico"
+        Width="1440" Height="900"
+        MinWidth="1050" MinHeight="700"
+        WindowStartupLocation="CenterScreen"
+        WindowState="Maximized"
+        WindowStyle="None"
+        ResizeMode="CanResize"
+        Background="White"
+        FontFamily="Segoe UI"
         Name="LoginWin">
+
     <Window.Resources>
         <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter"/>
-        <!-- Inverse: True→Collapsed, False→Visible -->
         <converters:InverseBoolToVisibilityConverter x:Key="InverseBoolToVis"/>
-    </Window.Resources>
+        <converters:StringToVisibilityConverter x:Key="StringToVisibilityConverter"/>
 
-    <Grid>
-        <Grid.ColumnDefinitions>
-            <!-- Left panel: logo/branding -->
-            <ColumnDefinition Width="*" />
-            <!-- Right panel: login card -->
-            <ColumnDefinition Width="380" />
-        </Grid.ColumnDefinitions>
+        <SolidColorBrush x:Key="LoginGreen" Color="#07813B"/>
+        <SolidColorBrush x:Key="LoginDarkGreen" Color="#103E25"/>
+        <SolidColorBrush x:Key="LoginText" Color="#26382E"/>
+        <SolidColorBrush x:Key="LoginMuted" Color="#7D8A83"/>
 
-        <!-- ── LEFT PANEL ── -->
-        <!-- ── LEFT PANEL ── -->
-        <!-- ── LEFT PANEL ── -->
-        <Grid Grid.Column="0"
-      HorizontalAlignment="Stretch"
-      VerticalAlignment="Stretch">
+        <Style x:Key="FieldLabelStyle" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{StaticResource LoginText}"/>
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="Margin" Value="0,0,0,8"/>
+        </Style>
 
-            <Image Source="pack://application:,,,/GoodGovernanceApp;component/Assets/Images/bg.jpg"
-           Stretch="UniformToFill"
-           HorizontalAlignment="Center"
-           VerticalAlignment="Center"/>
+        <Style x:Key="FieldBorderStyle" TargetType="Border">
+            <Setter Property="Height" Value="56"/>
+            <Setter Property="Background" Value="#FCFFFFFF"/>
+            <Setter Property="BorderBrush" Value="#CFD9D3"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="11"/>
+            <Setter Property="Padding" Value="15,0"/>
+            <Style.Triggers>
+                <Trigger Property="IsKeyboardFocusWithin" Value="True">
+                    <Setter Property="BorderBrush" Value="#128643"/>
+                    <Setter Property="BorderThickness" Value="2"/>
+                    <Setter Property="Effect">
+                        <Setter.Value>
+                            <DropShadowEffect Color="#128643" BlurRadius="12" ShadowDepth="0" Opacity="0.14"/>
+                        </Setter.Value>
+                    </Setter>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
 
-            <Rectangle>
-                <Rectangle.Fill>
-                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
-                        <GradientStop Color="#90B800" Offset="0"/>
-                        <GradientStop Color="#CC8B0000" Offset="1"/>
-                    </LinearGradientBrush>
-                </Rectangle.Fill>
-            </Rectangle>
-
-            <Rectangle VerticalAlignment="Top" Height="5">
-                <Rectangle.Fill>
-                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
-                        
-                       
-                    </LinearGradientBrush>
-                </Rectangle.Fill>
-            </Rectangle>
-
-            <StackPanel VerticalAlignment="Center"
-                HorizontalAlignment="Center" Height="358" Width="377">
-
-                <Image Width="161" Height="161"
-               Stretch="Uniform"
-               HorizontalAlignment="Center"
-               Margin="0 0 0 24">
-                    <Image.Effect>
-                        <DropShadowEffect BlurRadius="20" ShadowDepth="4" Opacity="0.3" Color="Black" Direction="270"/>
-                    </Image.Effect>
-                    <Image.Source>
-                        <Binding Path="LogoSource"/>
-                    </Image.Source>
-                </Image>
-
-                <TextBlock Text="{Binding GovernanceName}"
-                   FontSize="26" FontWeight="Bold"
-                   Foreground="White"
-                   HorizontalAlignment="Center"
-                   TextAlignment="Center"
-                   TextWrapping="Wrap"/>
-
-                <TextBlock Text="{Binding Address}"
-                   FontSize="17" FontWeight="Light"
-                   Foreground="White"
-                   HorizontalAlignment="Center"
-                   TextAlignment="Center"
-                   TextWrapping="Wrap"/>
-
-                <Separator Margin="24 20" Background="#4DFFEA93"/>
-
-                <TextBlock Text="Transparency · Accountability · Integrity"
-                   FontSize="20"
-                   HorizontalAlignment="Center"
-                   TextAlignment="Center"
-                   Foreground="White"/>
-            </StackPanel>
-
-        </Grid>
-
-        <!-- ── RIGHT PANEL ── -->
-        <Grid Grid.Column="1">
-            <materialDesign:Card VerticalAlignment="Center"
-                                 Margin="24,0,24,0"
-                                 Padding="24" Height="479">
-                <StackPanel>
-
-                    <!-- Clean, Responsive Logo Display -->
-                    <Border CornerRadius="8" MaxHeight="120" MaxWidth="240" HorizontalAlignment="Center" Margin="0,0,0,20" Background="Transparent" ClipToBounds="True">
-                        <!-- We apply shadow to a wrapping container if we want it to tightly fit, 
-                             or we can apply it directly here. Since it's a transparent image potentially, 
-                             a shadow on the image itself looks best. -->
-                        <Image Source="{Binding SystemPhotoSource}" Stretch="Uniform">
-                            <Image.Effect>
-                                <DropShadowEffect BlurRadius="15" ShadowDepth="3" Opacity="0.15" Color="Black" Direction="270"/>
-                            </Image.Effect>
-                        </Image>
-                    </Border>
-
-                    <TextBlock Text="Welcome Back"
-                               FontSize="24" FontWeight="Bold"
-                               Margin="0 0 0 8"
-                               HorizontalAlignment="Center"
-                                Foreground="#000000"/>
-                    <TextBlock Text="Login to your account"
-                               FontSize="14" Foreground="Gray"
-                               Margin="0 0 0 24"
-                               HorizontalAlignment="Center"/>
-
-                    <!-- Username or Email -->
-                    <TextBox materialDesign:HintAssist.Hint="Username or Email"
-                             Style="{StaticResource MaterialDesignFloatingHintTextBox}"
-                             Text="{Binding Username, UpdateSourceTrigger=PropertyChanged}"
-                              Foreground="#000000"
-                             Margin="0 0 0 16"/>
-
-                    <!-- Password with show/hide toggle -->
-                    <Grid Margin="0 0 0 8">
-                        <!-- Hidden password (masked) -->
-                        <PasswordBox materialDesign:HintAssist.Hint="Password"
-                                     Style="{StaticResource MaterialDesignFloatingHintPasswordBox}"
-                                     Name="PasswordBoxControl"
-                                     PasswordChanged="PasswordBox_PasswordChanged"
-                                     Foreground="#000000"
-                                     Padding="0,0,36,0"
-                                     Visibility="{Binding IsPasswordVisible,
-                                         Converter={StaticResource InverseBoolToVis},
-                                         FallbackValue=Visible}"/>
-
-                        <!-- Visible password (plain text) -->
-                        <TextBox materialDesign:HintAssist.Hint="Password"
-                                 Style="{StaticResource MaterialDesignFloatingHintTextBox}"
-                                 Text="{Binding Password, UpdateSourceTrigger=PropertyChanged}"
-                                 Foreground="#000000"
-                                 Padding="0,0,36,0"
-                                 Visibility="{Binding IsPasswordVisible,
-                                     Converter={StaticResource BooleanToVisibilityConverter},
-                                     FallbackValue=Collapsed}"/>
-
-                        <!-- Eye toggle button -->
-                        <ToggleButton HorizontalAlignment="Right"
-                                      VerticalAlignment="Bottom"
-                                      Margin="0,0,0,4"
-                                      Width="28" Height="28"
-                                      Padding="0"
-                                      IsChecked="{Binding IsPasswordVisible}"
-                                      Style="{StaticResource MaterialDesignFlatToggleButton}"
-                                      ToolTip="Show / Hide Password">
-                            <materialDesign:PackIcon>
-                                <materialDesign:PackIcon.Style>
-                                    <Style TargetType="materialDesign:PackIcon">
-                                        <Setter Property="Kind" Value="EyeOutline"/>
+        <Style x:Key="LoginTextBoxStyle" TargetType="TextBox">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="Foreground" Value="#1A2F23"/>
+            <Setter Property="CaretBrush" Value="#07813B"/>
+            <Setter Property="FontSize" Value="15"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TextBox">
+                        <Grid>
+                            <ScrollViewer x:Name="PART_ContentHost"
+                                          VerticalAlignment="Center"
+                                          Focusable="False"/>
+                            <TextBlock Text="{TemplateBinding Tag}"
+                                       Foreground="#9AA69F"
+                                       FontSize="15"
+                                       VerticalAlignment="Center"
+                                       IsHitTestVisible="False">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Visibility" Value="Collapsed"/>
                                         <Style.Triggers>
-                                            <DataTrigger Binding="{Binding IsPasswordVisible}" Value="True">
-                                                <Setter Property="Kind" Value="EyeOffOutline"/>
+                                            <DataTrigger Binding="{Binding Text, RelativeSource={RelativeSource TemplatedParent}}" Value="">
+                                                <Setter Property="Visibility" Value="Visible"/>
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding Text, RelativeSource={RelativeSource TemplatedParent}}" Value="{x:Null}">
+                                                <Setter Property="Visibility" Value="Visible"/>
                                             </DataTrigger>
                                         </Style.Triggers>
                                     </Style>
-                                </materialDesign:PackIcon.Style>
-                            </materialDesign:PackIcon>
-                        </ToggleButton>
-                    </Grid>
+                                </TextBlock.Style>
+                            </TextBlock>
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
 
-                    <!-- Error / status message -->
-                    <TextBlock Text="{Binding ErrorMessage}"
-                               Foreground="Red"
-                               Margin="0 0 0 12"
-                               HorizontalAlignment="Center"
-                               TextWrapping="Wrap"
-                               FontSize="12"/>
+        <Style x:Key="WindowControlButtonStyle" TargetType="Button">
+            <Setter Property="Width" Value="36"/>
+            <Setter Property="Height" Value="36"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="ChromeBackground" Background="Transparent" CornerRadius="8">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="ChromeBackground" Property="Background" Value="#EEF2EF"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
 
-                    <!-- LOGIN button + spinner -->
-                    <Grid Margin="0 8 0 0">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
+    <Grid Background="White">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="62*"/>
+            <ColumnDefinition Width="38*"/>
+        </Grid.ColumnDefinitions>
 
+        <!-- Reference left panel, using the system's real municipal hall asset. -->
+        <Grid Grid.Column="0" Background="#E8EFEA" MouseLeftButtonDown="LoginDragMove">
+            <Image Source="pack://application:,,,/GoodGovernanceApp;component/Assets/Images/bg.jpg"
+                   Stretch="UniformToFill"
+                   RenderOptions.BitmapScalingMode="HighQuality"/>
+            <!-- Soft scrim so the centered identity remains readable over the photo. -->
+            <Rectangle>
+                <Rectangle.Fill>
+                    <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                        <GradientStop Color="#26000000" Offset="0"/>
+                        <GradientStop Color="#73000000" Offset="1"/>
+                    </LinearGradientBrush>
+                </Rectangle.Fill>
+            </Rectangle>
 
+            <!-- Reference micro-label. Spaced glyphs emulate CSS letter spacing in WPF. -->
+            <TextBlock Text="P E O P L E   •   S E R V I C E   •   P R O G R E S S"
+                       HorizontalAlignment="Left" VerticalAlignment="Top"
+                       Margin="48,38,0,0"
+                       Foreground="White" Opacity="0.9"
+                       FontSize="10" FontWeight="SemiBold"/>
 
-                        <Button Grid.Column="0"
-                                Content="LOGIN"
-                                Command="{Binding LoginCommand}"
-                                CommandParameter="{Binding ElementName=LoginWin}"
-                                Style="{StaticResource MaterialDesignRaisedButton}" Grid.ColumnSpan="3" Margin="0,0,29,0"/>
+            <!-- Responsive municipal identity composition. -->
+            <Viewbox Margin="72,92,96,130" Stretch="Uniform" StretchDirection="DownOnly">
+                <Grid Width="760" Height="650">
+                    <StackPanel VerticalAlignment="Center">
+                        <StackPanel.Effect>
+                            <DropShadowEffect Color="Black" BlurRadius="14" ShadowDepth="3" Opacity="0.55"/>
+                        </StackPanel.Effect>
 
-                        <ProgressBar Grid.Column="2"
-                                     Style="{StaticResource MaterialDesignCircularProgressBar}"
-                                     IsIndeterminate="True"
-                                     Width="24" Height="24"
-                                     Margin="10 0 0 0"
-                                     VerticalAlignment="Center"
-                                     Visibility="{Binding IsLoggingIn, Converter={StaticResource BooleanToVisibilityConverter}}"/>
-                    </Grid>
+                        <Image Source="{Binding LogoSource}" Width="150" Height="150"
+                               Stretch="Uniform" HorizontalAlignment="Center" Margin="0,0,0,16"/>
+                        <TextBlock Text="{Binding GovernanceName}" FontSize="34" FontWeight="Bold"
+                                   Foreground="White" HorizontalAlignment="Center"
+                                   TextAlignment="Center" TextWrapping="Wrap"/>
+                        <TextBlock Text="DIGITAL GOVERNANCE FOR A BETTER SULOP"
+                                   FontSize="12" FontWeight="SemiBold"
+                                   Foreground="White" Opacity="0.92"
+                                   HorizontalAlignment="Center" Margin="0,5,0,10"/>
 
-                    <Button Content="Database Connection Settings"
-                            Command="{Binding OpenDbSettingsCommand}"
-                            Style="{StaticResource MaterialDesignFlatButton}"
-                            Margin="0 16 0 0"
-                             Foreground="#000000"/>
+                        <Border Width="460" Height="3" CornerRadius="2" HorizontalAlignment="Center">
+                            <Border.Background>
+                                <LinearGradientBrush StartPoint="0,0.5" EndPoint="1,0.5">
+                                    <GradientStop Color="#07813B" Offset="0"/>
+                                    <GradientStop Color="#F4B91B" Offset="0.55"/>
+                                    <GradientStop Color="#D91F26" Offset="1"/>
+                                </LinearGradientBrush>
+                            </Border.Background>
+                        </Border>
 
+                        <!-- Four governance values from the approved reference. -->
+                        <UniformGrid Columns="4" Rows="1" Margin="0,22,0,0">
+                            <StackPanel HorizontalAlignment="Center">
+                                <materialDesign:PackIcon Kind="AccountGroup" Width="30" Height="30"
+                                                         Foreground="White" HorizontalAlignment="Center"/>
+                                <TextBlock Text="TRANSPARENCY" Foreground="White" Opacity="0.9"
+                                           FontSize="10" FontWeight="SemiBold" Margin="0,8,0,0"
+                                           HorizontalAlignment="Center"/>
+                            </StackPanel>
+                            <StackPanel HorizontalAlignment="Center">
+                                <materialDesign:PackIcon Kind="ShieldCheck" Width="30" Height="30"
+                                                         Foreground="White" HorizontalAlignment="Center"/>
+                                <TextBlock Text="ACCOUNTABILITY" Foreground="White" Opacity="0.9"
+                                           FontSize="10" FontWeight="SemiBold" Margin="0,8,0,0"
+                                           HorizontalAlignment="Center"/>
+                            </StackPanel>
+                            <StackPanel HorizontalAlignment="Center">
+                                <materialDesign:PackIcon Kind="Cog" Width="30" Height="30"
+                                                         Foreground="White" HorizontalAlignment="Center"/>
+                                <TextBlock Text="INTEGRITY" Foreground="White" Opacity="0.9"
+                                           FontSize="10" FontWeight="SemiBold" Margin="0,8,0,0"
+                                           HorizontalAlignment="Center"/>
+                            </StackPanel>
+                            <StackPanel HorizontalAlignment="Center">
+                                <materialDesign:PackIcon Kind="ChartBar" Width="30" Height="30"
+                                                         Foreground="White" HorizontalAlignment="Center"/>
+                                <TextBlock Text="EFFICIENT SERVICE" Foreground="White" Opacity="0.9"
+                                           FontSize="10" FontWeight="SemiBold" Margin="0,8,0,0"
+                                           HorizontalAlignment="Center"/>
+                            </StackPanel>
+                        </UniformGrid>
 
+                        <!-- Handwritten municipal motto. -->
+                        <Grid Height="132" Margin="0,30,0,0">
+                            <StackPanel HorizontalAlignment="Left" Margin="92,0,0,0">
+                                <TextBlock FontFamily="Segoe Script, Brush Script MT"
+                                           Foreground="White" FontSize="23" FontStyle="Italic"
+                                           LineHeight="29" TextAlignment="Center">
+                                    <Run Text="Usa ka Tinguha"/><LineBreak/>
+                                    <Run Text="Usa ka Lihok"/><LineBreak/>
+                                    <Run Text="Kalambuan sa Tanan"/>
+                                </TextBlock>
+                                <Viewbox Width="220" Height="17" Stretch="Fill" Margin="0,2,0,0">
+                                    <Canvas Width="220" Height="17">
+                                        <Path Data="M 3,11 C 58,2 132,16 216,5"
+                                              Stroke="#F4B91B" StrokeThickness="3"
+                                              StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
+                                    </Canvas>
+                                </Viewbox>
+                            </StackPanel>
+                        </Grid>
+                    </StackPanel>
+                </Grid>
+            </Viewbox>
+
+            <!-- Bottom-left municipality location. -->
+            <StackPanel Orientation="Horizontal"
+                        HorizontalAlignment="Left" VerticalAlignment="Bottom"
+                        Margin="48,0,0,38">
+                <materialDesign:PackIcon Kind="MapMarker" Width="22" Height="22"
+                                         Foreground="White" Margin="0,1,10,0"/>
+                <StackPanel>
+                    <TextBlock Text="Municipality of Sulop" Foreground="White"
+                               FontSize="12" FontWeight="Bold"/>
+                    <TextBlock Text="Davao del Sur, Region XI" Foreground="White"
+                               FontSize="11" Opacity="0.9" Margin="0,2,0,0"/>
                 </StackPanel>
-            </materialDesign:Card>
+            </StackPanel>
         </Grid>
 
+        <!-- Narrow S-curve panel and its perfectly matched tricolor edge. -->
+        <Viewbox Grid.Column="1"
+                 Margin="-56,0,0,0"
+                 HorizontalAlignment="Stretch"
+                 VerticalAlignment="Stretch"
+                 Stretch="Fill"
+                 IsHitTestVisible="False"
+                 Panel.ZIndex="2">
+            <Canvas Width="786" Height="900">
+                <!-- The white surface closes toward the right; its left edge is the S-curve. -->
+                <Path Data="M 40,0 C 26,140 30,280 49,390 C 58,455 58,525 50,600 C 38,710 25,810 40,900 L 786,900 L 786,0 Z"
+                      Fill="White">
+                    <Path.Effect>
+                        <DropShadowEffect Color="Black" Direction="180" BlurRadius="15" ShadowDepth="3" Opacity="0.05"/>
+                    </Path.Effect>
+                </Path>
+
+                <!-- Exact same open curve, so the accent never appears on the outer panel edges. -->
+                <Path Data="M 40,0 C 26,140 30,280 49,390 C 58,455 58,525 50,600 C 38,710 25,810 40,900"
+                      StrokeThickness="6"
+                      StrokeStartLineCap="Round"
+                      StrokeEndLineCap="Round">
+                    <Path.Stroke>
+                        <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                            <GradientStop Color="#07813B" Offset="0"/>
+                            <GradientStop Color="#07813B" Offset="0.48"/>
+                            <GradientStop Color="#F4BE1C" Offset="0.48"/>
+                            <GradientStop Color="#F4BE1C" Offset="0.72"/>
+                            <GradientStop Color="#DB2028" Offset="0.72"/>
+                            <GradientStop Color="#DB2028" Offset="1"/>
+                        </LinearGradientBrush>
+                    </Path.Stroke>
+                </Path>
+            </Canvas>
+        </Viewbox>
+
+        <!-- Login surface. -->
+        <Grid Grid.Column="1" Margin="56,0,0,0" Background="Transparent" Panel.ZIndex="3">
+            <StackPanel HorizontalAlignment="Right"
+                        VerticalAlignment="Top"
+                        Margin="0,52,48,0"
+                        Panel.ZIndex="4"
+                        IsHitTestVisible="False"
+                        RenderTransformOrigin="0.5,0.5">
+                <StackPanel.RenderTransform>
+                    <RotateTransform Angle="-4"/>
+                </StackPanel.RenderTransform>
+                <TextBlock Text="Sulop"
+                           Foreground="#74867B"
+                           FontFamily="Segoe Script, Brush Script MT"
+                           FontSize="17"
+                           FontWeight="SemiBold"
+                           TextAlignment="Center"/>
+                <TextBlock Text="for a Brighter"
+                           Foreground="#8D9A92"
+                           FontFamily="Segoe Script, Brush Script MT"
+                           FontSize="11"
+                           Margin="0,-3,0,0"
+                           TextAlignment="Center"/>
+                <TextBlock Text="Tomorrow"
+                           Foreground="#74867B"
+                           FontFamily="Segoe Script, Brush Script MT"
+                           FontSize="15"
+                           FontWeight="SemiBold"
+                           Margin="0,-3,0,0"
+                           TextAlignment="Center"/>
+            </StackPanel>
+
+            <Viewbox Margin="48,42,50,32"
+                     Stretch="Uniform"
+                     StretchDirection="DownOnly">
+                <Grid Width="510">
+                    <StackPanel>
+                        <!-- Exact eSulopGov system asset, cropped to remove transparent canvas. -->
+                        <Rectangle Width="360" Height="94" HorizontalAlignment="Center" Margin="0,0,0,20"
+                                   RenderOptions.BitmapScalingMode="HighQuality">
+                            <Rectangle.Fill>
+                                <ImageBrush ImageSource="pack://application:,,,/GoodGovernanceApp;component/Assets/Images/sulopgov.png"
+                                            Viewbox="0.025,0.385,0.95,0.255"
+                                            ViewboxUnits="RelativeToBoundingBox"
+                                            Stretch="Uniform"/>
+                            </Rectangle.Fill>
+                        </Rectangle>
+
+                        <TextBlock Text="Welcome Back"
+                                   Foreground="{StaticResource LoginDarkGreen}"
+                                   FontSize="46"
+                                   FontWeight="ExtraBold"
+                                   TextAlignment="Center"/>
+                        <TextBlock Foreground="{StaticResource LoginMuted}"
+                                   FontSize="15.5"
+                                   LineHeight="24"
+                                   TextAlignment="Center"
+                                   Margin="0,10,0,28">
+                            <Run Text="Sign in to access the Sulop Governance System"/>
+                            <LineBreak/>
+                            <Run Text="and continue making a better Sulop."/>
+                        </TextBlock>
+
+                        <TextBlock Text="Username or Email" Style="{StaticResource FieldLabelStyle}"/>
+                        <Border Style="{StaticResource FieldBorderStyle}" Margin="0,0,0,18">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="24"/>
+                                    <ColumnDefinition Width="12"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <materialDesign:PackIcon Kind="AccountOutline" Width="21" Height="21"
+                                                         Foreground="#6C7A72" VerticalAlignment="Center"/>
+                                <TextBox Grid.Column="2"
+                                         Style="{StaticResource LoginTextBoxStyle}"
+                                         Tag="Enter your username or email"
+                                         Text="{Binding Username, UpdateSourceTrigger=PropertyChanged}"/>
+                            </Grid>
+                        </Border>
+
+                        <TextBlock Text="Password" Style="{StaticResource FieldLabelStyle}"/>
+                        <Border Style="{StaticResource FieldBorderStyle}" Margin="0,0,0,16">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="24"/>
+                                    <ColumnDefinition Width="12"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="38"/>
+                                </Grid.ColumnDefinitions>
+
+                                <materialDesign:PackIcon Kind="LockOutline" Width="20" Height="20"
+                                                         Foreground="#6C7A72" VerticalAlignment="Center"/>
+
+                                <Grid Grid.Column="2">
+                                    <TextBlock x:Name="PasswordPlaceholder"
+                                               Text="Enter your password"
+                                               Foreground="#9AA69F"
+                                               FontSize="15"
+                                               VerticalAlignment="Center"
+                                               IsHitTestVisible="False"/>
+                                    <PasswordBox x:Name="PasswordBoxControl"
+                                                 PasswordChanged="PasswordBox_PasswordChanged"
+                                                 Background="Transparent"
+                                                 BorderThickness="0"
+                                                 Padding="0"
+                                                 Foreground="#1A2F23"
+                                                 FontSize="15"
+                                                 VerticalContentAlignment="Center"
+                                                 Visibility="{Binding IsPasswordVisible, Converter={StaticResource InverseBoolToVis}, FallbackValue=Visible}"/>
+                                    <TextBox Style="{StaticResource LoginTextBoxStyle}"
+                                             Tag="Enter your password"
+                                             Text="{Binding Password, UpdateSourceTrigger=PropertyChanged}"
+                                             Visibility="{Binding IsPasswordVisible, Converter={StaticResource BooleanToVisibilityConverter}, FallbackValue=Collapsed}"/>
+                                </Grid>
+
+                                <ToggleButton Grid.Column="3"
+                                              x:Name="PasswordVisibilityToggle"
+                                              Width="36" Height="36"
+                                              Padding="0"
+                                              Background="Transparent"
+                                              BorderThickness="0"
+                                              Cursor="Hand"
+                                              IsChecked="{Binding IsPasswordVisible}"
+                                              Checked="PasswordVisibilityToggle_Changed"
+                                              Unchecked="PasswordVisibilityToggle_Changed"
+                                              ToolTip="Show or hide password">
+                                    <ToggleButton.Template>
+                                        <ControlTemplate TargetType="ToggleButton">
+                                            <Border x:Name="EyeBackground" Background="Transparent" CornerRadius="18">
+                                                <materialDesign:PackIcon x:Name="EyeIcon" Kind="EyeOutline"
+                                                                         Width="20" Height="20"
+                                                                         Foreground="#5D7166"
+                                                                         HorizontalAlignment="Center"
+                                                                         VerticalAlignment="Center"/>
+                                            </Border>
+                                            <ControlTemplate.Triggers>
+                                                <Trigger Property="IsChecked" Value="True">
+                                                    <Setter TargetName="EyeIcon" Property="Kind" Value="EyeOffOutline"/>
+                                                </Trigger>
+                                                <Trigger Property="IsMouseOver" Value="True">
+                                                    <Setter TargetName="EyeBackground" Property="Background" Value="#EEF4F0"/>
+                                                </Trigger>
+                                            </ControlTemplate.Triggers>
+                                        </ControlTemplate>
+                                    </ToggleButton.Template>
+                                </ToggleButton>
+                            </Grid>
+                        </Border>
+
+                        <Grid Margin="0,-2,0,20">
+                            <CheckBox Content="Remember me"
+                                      IsChecked="{Binding IsRememberMe}"
+                                      Foreground="#4B5B52"
+                                      FontSize="13"
+                                      FontWeight="SemiBold"
+                                      VerticalAlignment="Center"/>
+                            <Button Content="Forgot password?"
+                                    Command="{Binding ForgotPasswordCommand}"
+                                    HorizontalAlignment="Right"
+                                    Padding="4"
+                                    Background="Transparent"
+                                    BorderThickness="0"
+                                    Foreground="{StaticResource LoginGreen}"
+                                    FontSize="13"
+                                    FontWeight="Bold"
+                                    Cursor="Hand"/>
+                        </Grid>
+
+                        <TextBlock Text="{Binding ErrorMessage}"
+                                   Visibility="{Binding ErrorMessage, Converter={StaticResource StringToVisibilityConverter}}"
+                                   Foreground="#C62828"
+                                   Background="#FFF0F0"
+                                   Padding="12,9"
+                                   Margin="0,0,0,14"
+                                   TextAlignment="Center"
+                                   TextWrapping="Wrap"
+                                   FontSize="12"/>
+
+                        <Button Height="58"
+                                Command="{Binding LoginCommand}"
+                                CommandParameter="{Binding ElementName=LoginWin}"
+                                IsDefault="True"
+                                Cursor="Hand"
+                                Foreground="White"
+                                FontSize="17"
+                                FontWeight="ExtraBold"
+                                BorderThickness="0">
+                            <Button.Template>
+                                <ControlTemplate TargetType="Button">
+                                    <Border x:Name="SignInBackground" CornerRadius="11">
+                                        <Border.Background>
+                                            <LinearGradientBrush StartPoint="0,0.5" EndPoint="1,0.5">
+                                                <GradientStop Color="#07813B" Offset="0"/>
+                                                <GradientStop Color="#10994A" Offset="1"/>
+                                            </LinearGradientBrush>
+                                        </Border.Background>
+                                        <Border.Effect>
+                                            <DropShadowEffect Color="#08803B" BlurRadius="24" ShadowDepth="8" Opacity="0.20"/>
+                                        </Border.Effect>
+                                        <Grid>
+                                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                                <materialDesign:PackIcon Kind="Login" Width="21" Height="21" Foreground="White" Margin="0,0,10,0"/>
+                                                <TextBlock x:Name="SignInText" Text="SIGN IN" Foreground="White"
+                                                           FontSize="17" FontWeight="ExtraBold" VerticalAlignment="Center"/>
+                                                <ProgressBar x:Name="SignInProgress"
+                                                             Style="{StaticResource MaterialDesignCircularProgressBar}"
+                                                             IsIndeterminate="True"
+                                                             Width="22" Height="22"
+                                                             Foreground="White"
+                                                             Margin="12,0,0,0"
+                                                             Visibility="Collapsed"/>
+                                            </StackPanel>
+                                        </Grid>
+                                    </Border>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter TargetName="SignInBackground" Property="Opacity" Value="0.92"/>
+                                        </Trigger>
+                                        <Trigger Property="IsPressed" Value="True">
+                                            <Setter TargetName="SignInBackground" Property="Opacity" Value="0.82"/>
+                                        </Trigger>
+                                        <Trigger Property="IsEnabled" Value="False">
+                                            <Setter TargetName="SignInBackground" Property="Opacity" Value="0.48"/>
+                                        </Trigger>
+                                        <DataTrigger Binding="{Binding IsLoggingIn}" Value="True">
+                                            <Setter TargetName="SignInText" Property="Text" Value="SIGNING IN..."/>
+                                            <Setter TargetName="SignInProgress" Property="Visibility" Value="Visible"/>
+                                        </DataTrigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </Button.Template>
+                        </Button>
+
+                        <Grid Margin="0,23,0,17">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Border Height="1" Background="#DFE6E2" VerticalAlignment="Center"/>
+                            <TextBlock Grid.Column="1" Text="or" Foreground="#A2ADA7" FontSize="12" Margin="14,0"/>
+                            <Border Grid.Column="2" Height="1" Background="#DFE6E2" VerticalAlignment="Center"/>
+                        </Grid>
+
+                        <Button Height="46"
+                                AutomationProperties.Name="Database Connection Settings"
+                                Command="{Binding OpenDbSettingsCommand}"
+                                Background="#F1F4F2"
+                                BorderBrush="#E0E7E3"
+                                BorderThickness="1"
+                                Foreground="#41554A"
+                                FontWeight="Bold"
+                                Cursor="Hand">
+                            <Button.Template>
+                                <ControlTemplate TargetType="Button">
+                                    <Border x:Name="DatabaseButtonBackground"
+                                            Background="{TemplateBinding Background}"
+                                            BorderBrush="{TemplateBinding BorderBrush}"
+                                            BorderThickness="{TemplateBinding BorderThickness}"
+                                            CornerRadius="23">
+                                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                            <materialDesign:PackIcon Kind="DatabaseCogOutline" Width="18" Height="18"
+                                                                     Foreground="#41554A" Margin="0,0,9,0"/>
+                                            <TextBlock Text="Database Connection Settings"/>
+                                        </StackPanel>
+                                    </Border>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter TargetName="DatabaseButtonBackground" Property="Background" Value="#E6EEE9"/>
+                                            <Setter TargetName="DatabaseButtonBackground" Property="BorderBrush" Value="#BDD0C4"/>
+                                        </Trigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </Button.Template>
+                        </Button>
+
+                        <TextBlock Foreground="#9AA69F"
+                                   FontSize="11.5"
+                                   LineHeight="18"
+                                   TextAlignment="Center"
+                                   Margin="0,28,0,0">
+                            <Run Text="© 2026 Municipality of Sulop. All Rights Reserved."/>
+                            <LineBreak/>
+                            <Run Text="Service to the People  •  A Progressive Sulop"/>
+                        </TextBlock>
+                    </StackPanel>
+                </Grid>
+            </Viewbox>
+        </Grid>
+
+        <!-- Borderless WPF window controls retained for the desktop application. -->
+        <StackPanel Grid.Column="1" Orientation="Horizontal"
+                    HorizontalAlignment="Right" VerticalAlignment="Top"
+                    Margin="0,12,14,0" Panel.ZIndex="20">
+            <Button Style="{StaticResource WindowControlButtonStyle}" Click="MinimizeButton_Click" ToolTip="Minimize">
+                <materialDesign:PackIcon Kind="WindowMinimize" Foreground="#26382E" Width="16" Height="16"/>
+            </Button>
+            <Button Style="{StaticResource WindowControlButtonStyle}" Margin="3,0,0,0" Click="CloseButton_Click" ToolTip="Close">
+                <materialDesign:PackIcon Kind="Close" Foreground="#26382E" Width="17" Height="17"/>
+            </Button>
+        </StackPanel>
     </Grid>
 </Window>
