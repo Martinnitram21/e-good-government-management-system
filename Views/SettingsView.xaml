@@ -146,7 +146,7 @@
                         <materialDesign:PackIcon Kind="Lan" Width="22" Height="22"
                                                   VerticalAlignment="Center" Margin="0 0 8 0"
                                                   Foreground="#000000"/>
-                        <TextBlock Text="Network Databases (Remote — 2 Connections)" FontSize="18" FontWeight="SemiBold" VerticalAlignment="Center" Foreground="#000000"/>
+                        <TextBlock Text="Network Databases (LAN — 2 Connections)" FontSize="18" FontWeight="SemiBold" VerticalAlignment="Center" Foreground="#000000"/>
                     </StackPanel>
 
                     <TextBlock Text="Two separate databases on 192.168.0.47 — GGMS (main) and CRS. Each connection is tested independently."
@@ -271,10 +271,10 @@
                               SelectedValuePath="Content"
                               Style="{StaticResource MaterialDesignOutlinedComboBox}"
                               Width="260" HorizontalAlignment="Left" Margin="0 0 0 4">
-                        <ComboBoxItem Content="Remote"/>
+                        <ComboBoxItem Content="Online"/>
                         <ComboBoxItem Content="Network"/>
                     </ComboBox>
-                    <TextBlock Text="Remote = cloud (194.59.164.58) • Network = office LAN (192.168.0.47). Footer shows only the active one."
+                    <TextBlock Text="Online = cloud database • Network = office LAN. Footer shows only the active one."
                                FontSize="11" Foreground="#555555" Margin="0 0 0 16" TextWrapping="Wrap"/>
 
                     <StackPanel Orientation="Horizontal" Margin="0 0 0 16">
