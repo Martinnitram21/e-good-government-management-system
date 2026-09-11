@@ -104,6 +104,7 @@ public static class ImageHelper
             Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "GoodGovernanceApp"),
             Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "GoodGovernanceApp", "Logos"),
             Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "GoodGovernanceApp", "ProfilePhotos"),
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "GoodGovernanceApp", "Uploads"),
             Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Assets", "Images"),
             Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "ProfilePhotos"),
             Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Uploads")
