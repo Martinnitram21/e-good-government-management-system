@@ -82,7 +82,7 @@ public class CrsBeneficiaryService : ICrsBeneficiaryService
                 is_pwd, pwd_id_no, is_senior, senior_id_no,
                 disability_type, cause_of_disability,
                 created_at, updated_at
-            FROM val_beneficiaries
+            FROM `crs_db`.`val_beneficiaries`
             WHERE beneficiary_id = @id
             LIMIT 1;";
 
