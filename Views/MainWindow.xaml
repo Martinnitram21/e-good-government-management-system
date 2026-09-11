@@ -6,12 +6,14 @@
         xmlns:converters="clr-namespace:GoodGovernanceApp.Converters"
         xmlns:components="clr-namespace:GoodGovernanceApp.Views.Components"
         Title="Good Governance Management System"
-        Icon="pack://application:,,,/GoodGovernanceApp;component/Assets/Images/ggms.ico"
+        Icon="pack://application:,,,/GoodGovernanceApp;component/Assets/Images/applicationlogo.ico"
         Height="780" Width="1280"
         MinHeight="640" MinWidth="960"
         WindowStartupLocation="CenterScreen"
         WindowState="Maximized"
-        Background="#F3F5F7"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent"
         FontFamily="Segoe UI"
         Name="MainWin">
 
@@ -341,6 +343,9 @@
         </materialDesign:DialogHost.DialogContent>
 
 
+        <!-- Rounded theme frame (borderless window chrome). -->
+        <Border CornerRadius="12" Background="#F3F5F7"
+                BorderBrush="#E5DFA8" BorderThickness="1">
         <Grid>
             <Grid.ColumnDefinitions>
                 <ColumnDefinition>
@@ -348,9 +353,13 @@
                         <Style TargetType="ColumnDefinition">
                             <Setter Property="Width" Value="0"/>
                             <Style.Triggers>
-                                <DataTrigger Binding="{Binding IsSidebarOpen}" Value="True">
+                                <MultiDataTrigger>
+                                    <MultiDataTrigger.Conditions>
+                                        <Condition Binding="{Binding IsSidebarOpen}" Value="True"/>
+                                        <Condition Binding="{Binding IsShowingView}" Value="True"/>
+                                    </MultiDataTrigger.Conditions>
                                     <Setter Property="Width" Value="264"/>
-                                </DataTrigger>
+                                </MultiDataTrigger>
                             </Style.Triggers>
                         </Style>
                     </ColumnDefinition.Style>
@@ -363,11 +372,66 @@
                 <RowDefinition Height="Auto"/>
             </Grid.RowDefinitions>
 
-            <components:SidebarControl Grid.Column="0" Grid.Row="0" Grid.RowSpan="3" />
+            <components:SidebarControl Grid.Column="0" Grid.Row="0" Grid.RowSpan="3"
+                                       Visibility="{Binding IsShowingView, Converter={StaticResource BoolToVis}}" />
             <components:HeaderControl Grid.Column="1" Grid.Row="0" />
             <components:DashboardControl Grid.Column="1" Grid.Row="1" />
             <components:FooterControl Grid.Column="1" Grid.Row="2" />
 
+            <!-- Full-shell loading overlay, adapted from the reference application. -->
+            <Grid x:Name="GlobalLoadingOverlay"
+                  Grid.Row="0" Grid.RowSpan="3"
+                  Grid.Column="0" Grid.ColumnSpan="2"
+                  Panel.ZIndex="5000"
+                  Background="White"
+                  Opacity="0"
+                  Visibility="Collapsed">
+                <Border x:Name="GlobalLoadingPanel"
+                        Width="560"
+                        Padding="32"
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Center"
+                        Background="Transparent"
+                        BorderThickness="0"
+                        RenderTransformOrigin="0.5,0.5">
+                    <Border.RenderTransform>
+                        <TransformGroup>
+                            <ScaleTransform x:Name="GlobalLoadingPanelScale" ScaleX="0.97" ScaleY="0.97"/>
+                            <TranslateTransform x:Name="GlobalLoadingPanelTranslate" Y="10"/>
+                        </TransformGroup>
+                    </Border.RenderTransform>
+
+                    <StackPanel HorizontalAlignment="Center">
+                        <Image Source="pack://application:,,,/GoodGovernanceApp;component/Assets/Images/sulopgov.png"
+                               Width="480"
+                               Height="150"
+                               HorizontalAlignment="Center"
+                               RenderOptions.BitmapScalingMode="HighQuality"
+                               Stretch="Uniform"/>
+
+                        <TextBlock x:Name="GlobalLoadingMessageText"
+                                   Text="LOADING..."
+                                   Margin="0,26,0,14"
+                                   HorizontalAlignment="Center"
+                                   Foreground="#171717"
+                                   FontSize="15"
+                                   FontWeight="Bold"
+                                   TextAlignment="Center"/>
+
+                        <ProgressBar Width="280"
+                                     Height="5"
+                                     IsIndeterminate="False"
+                                     Value="100"
+                                     Minimum="0"
+                                     Maximum="100"
+                                     Foreground="#D90000"
+                                     Background="#EFEFEF"
+                                     BorderThickness="0"/>
+                    </StackPanel>
+                </Border>
+            </Grid>
+
         </Grid>
+        </Border>
     </materialDesign:DialogHost>
 </Window>
