@@ -27,7 +27,7 @@
                 <ComboBox SelectedValue="{Binding DatabaseMode, UpdateSourceTrigger=PropertyChanged}"
                           SelectedValuePath="Content" Width="160"
                           Style="{StaticResource MaterialDesignOutlinedComboBox}">
-                    <ComboBoxItem Content="Remote"/>
+                    <ComboBoxItem Content="Online"/>
                     <ComboBoxItem Content="Network"/>
                 </ComboBox>
             </StackPanel>
