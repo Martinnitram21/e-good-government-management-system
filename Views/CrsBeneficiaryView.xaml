@@ -93,7 +93,7 @@
 
                 <!-- Load -->
                 <Button Grid.Column="9"
-                        Content="🔄 Load First 50"
+                        Content="🔄 Load First 1000"
                         Command="{Binding LoadCommand}"
                         Style="{StaticResource MaterialDesignOutlinedButton}"
                         IsEnabled="{Binding IsLoading, Converter={StaticResource InvertBooleanConverter}}"
@@ -112,6 +112,12 @@
               SelectionMode="Single"
               VerticalScrollBarVisibility="Auto"
               HorizontalScrollBarVisibility="Auto"
+              FrozenColumnCount="1"
+              ColumnHeaderHeight="42"
+              RowHeight="48"
+              EnableRowVirtualization="True"
+              EnableColumnVirtualization="True"
+              ScrollViewer.CanContentScroll="True"
               HorizontalAlignment="Stretch"
               VerticalAlignment="Stretch">
 
@@ -133,28 +139,28 @@
                         </DataGridTemplateColumn>
 
                         <DataGridTextColumn Header="Last Name"
-                Binding="{Binding LastName}" Width="1.5*"/>
+                Binding="{Binding LastName}" Width="150" MinWidth="120"/>
 
                         <DataGridTextColumn Header="First Name"
-                Binding="{Binding FirstName}" Width="1.5*"/>
+                Binding="{Binding FirstName}" Width="150" MinWidth="120"/>
 
                         <DataGridTextColumn Header="Middle Name"
-                Binding="{Binding MiddleName}" Width="1*"/>
+                Binding="{Binding MiddleName}" Width="130" MinWidth="110"/>
 
                         <DataGridTextColumn Header="Sex"
                 Binding="{Binding Sex}" Width="80"/>
 
                         <DataGridTextColumn Header="Date of Birth"
-                Binding="{Binding DisplayDateOfBirth}" Width="130"/>
+                Binding="{Binding DisplayDateOfBirth}" Width="150" MinWidth="130"/>
 
                         <DataGridTextColumn Header="Age"
-                Binding="{Binding DisplayAge}" Width="100"/>
+                Binding="{Binding DisplayAge}" Width="120" MinWidth="100"/>
 
                         <DataGridTextColumn Header="Marital Status"
-                Binding="{Binding MaritalStatus}" Width="120"/>
+                Binding="{Binding MaritalStatus}" Width="180" MinWidth="140"/>
 
                         <DataGridTextColumn Header="Classifications"
-                Binding="{Binding Classifications}" Width="160"/>
+                Binding="{Binding Classifications}" Width="180" MinWidth="150"/>
 
                         <DataGridCheckBoxColumn Header="PWD"
                 Binding="{Binding IsPwd}" Width="60"/>
@@ -169,7 +175,7 @@
                 Binding="{Binding SeniorIdNo}" Width="120"/>
 
                         <DataGridTextColumn Header="Address"
-                Binding="{Binding Address}" Width="2*"/>
+                Binding="{Binding Address}" Width="320" MinWidth="220"/>
 
                     </DataGrid.Columns>
                 </DataGrid>
