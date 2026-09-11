@@ -3,7 +3,6 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
-using System.Windows.Media.Effects;
 using MaterialDesignThemes.Wpf;
 
 namespace GoodGovernanceApp.Utilities;
@@ -48,17 +47,9 @@ public static class ModalChrome
         var frame = new Border
         {
             Background = surfaceBrush,
-            BorderBrush = new SolidColorBrush(Color.FromRgb(0xE5, 0xDF, 0xA8)),
-            BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(12),
-            ClipToBounds = true,
-            Effect = new DropShadowEffect
-            {
-                Color = Colors.Black,
-                BlurRadius = 24,
-                ShadowDepth = 4,
-                Opacity = 0.22
-            }
+            BorderThickness = new Thickness(0),
+            CornerRadius = new CornerRadius(14),
+            ClipToBounds = true
         };
 
         var layout = new Grid();
@@ -68,7 +59,7 @@ public static class ModalChrome
 
         var titleBar = new Border
         {
-            Background = new SolidColorBrush(Color.FromRgb(0xFF, 0xFD, 0xE0)),
+            Background = surfaceBrush,
             BorderBrush = new SolidColorBrush(Color.FromRgb(0xE5, 0xDF, 0xA8)),
             BorderThickness = new Thickness(0, 0, 0, 1)
         };
@@ -141,20 +132,15 @@ public static class ModalChrome
             }
         };
 
-        var contentSurface = new Border
-        {
-            Background = surfaceBrush,
-            Child = originalContent
-        };
-        Grid.SetRow(contentSurface, 1);
-        layout.Children.Add(contentSurface);
+        Grid.SetRow(originalContent, 1);
+        layout.Children.Add(originalContent);
 
         dialog.StateChanged += (_, _) =>
         {
             bool maximized = dialog.WindowState == WindowState.Maximized;
             maximizeIcon.Kind = maximized ? PackIconKind.WindowRestore : PackIconKind.WindowMaximize;
             maximizeButton.ToolTip = maximized ? "Restore" : "Maximize";
-            frame.CornerRadius = maximized ? new CornerRadius(0) : new CornerRadius(12);
+            frame.CornerRadius = maximized ? new CornerRadius(0) : new CornerRadius(14);
         };
 
         dialog.Content = frame;
